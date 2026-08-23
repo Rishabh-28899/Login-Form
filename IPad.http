@@ -1,0 +1,6 @@
+@IPad_HostAddress = http://localhost:5191
+
+GET {{IPad_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
