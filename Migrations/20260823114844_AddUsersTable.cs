@@ -2,7 +2,7 @@
 
 #nullable disable
 
-namespace IPad.Migrations
+namespace WritePad.Migrations
 {
     /// <inheritdoc />
     public partial class AddUsersTable : Migration

@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Identity;
 
 
 
-namespace IPad.Services
+namespace WritePad.Services
 {
     public class PasswordService
     {

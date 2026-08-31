@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace IPad.Migrations
+namespace WritePad.Migrations
 {
     /// <inheritdoc />
     public partial class AddRefreshTokens : Migration

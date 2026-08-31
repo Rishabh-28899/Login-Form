@@ -1,4 +1,4 @@
-﻿using IPad.Services;
+﻿using WritePad.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Token2Core.Controllers

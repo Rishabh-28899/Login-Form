@@ -9,7 +9,7 @@ using Token2Core.Data;
 
 #nullable disable
 
-namespace IPad.Migrations
+namespace WritePad.Migrations
 {
     [DbContext(typeof(TokenDbContext))]
     [Migration("20260823114844_AddUsersTable")]
@@ -25,7 +25,7 @@ namespace IPad.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
-            modelBuilder.Entity("IPad.Model.RefreshTokem", b =>
+            modelBuilder.Entity("WritePad.Model.RefreshTokem", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -52,7 +52,7 @@ namespace IPad.Migrations
                     b.ToTable("RefreshTokems");
                 });
 
-            modelBuilder.Entity("IPad.Model.User", b =>
+            modelBuilder.Entity("WritePad.Model.User", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()

@@ -1,4 +1,4 @@
-﻿namespace IPad.Model
+﻿namespace WritePad.Model
 {
     public class User
     {

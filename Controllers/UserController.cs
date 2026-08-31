@@ -1,8 +1,9 @@
-﻿using IPad.Model;
-using IPad.Services;
+﻿using WritePad.Model;
+using WritePad.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 using Token2Core.Data;
-
 
 namespace Token2Core.Controllers
 {
@@ -21,6 +22,9 @@ namespace Token2Core.Controllers
             _passwordService = passwordService;
         }
 
+        // ==========================================
+        // REGISTER
+        // ==========================================
         [HttpPost("register")]
         public IActionResult Register(
             [FromBody] RegisterRequest request)
@@ -57,5 +61,68 @@ namespace Token2Core.Controllers
                 username = user.Username
             });
         }
+
+        // ==========================================
+        // GET CURRENT LOGGED-IN USER
+        // ==========================================
+        [Authorize]
+        [HttpGet("getuser")]
+        public IActionResult GetUser()
+        {
+            // Get UserId added by UserIdMiddleware
+            var userIdValue = HttpContext.Items["UserId"]?.ToString();
+
+            if (string.IsNullOrEmpty(userIdValue))
+            {
+                return Unauthorized("User ID not found");
+            }
+
+            // Convert UserId to int
+            if (!int.TryParse(userIdValue, out int userId))
+            {
+                return Unauthorized("Invalid User ID");
+            }
+
+            // Find user in database
+            var user = _context.Users
+                .FirstOrDefault(x => x.Id == userId);
+
+            if (user == null)
+            {
+                return NotFound("User not found");
+            }
+
+            // Return current logged-in user
+            return Ok(new
+            {
+                id = user.Id,
+                username = user.Username,
+                email = user.Email,
+                role = user.Role
+            });
+        }
+
+        // ==========================================
+        // GET ALL USERS
+        // ==========================================
+        [Authorize]
+        [HttpGet("getallusers")]
+        public IActionResult GetAllUsers()
+        {
+            var users = _context.Users
+                .Select(user => new
+                {
+                    id = user.Id,
+                    username = user.Username,
+                    email = user.Email,
+                    role = user.Role
+                })
+                .ToList();
+
+            return Ok(users);
+        }
     }
 }
+
+
+

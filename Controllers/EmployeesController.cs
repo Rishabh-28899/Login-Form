@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace IPad.Controllers;
+namespace WritePad.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
