@@ -1,8 +1,9 @@
-﻿using WritePad.Model;
+﻿
+using WritePad.Model;
 using WritePad.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System.Security.Claims;
+using Microsoft.EntityFrameworkCore;
 using Token2Core.Data;
 
 namespace Token2Core.Controllers
@@ -22,77 +23,71 @@ namespace Token2Core.Controllers
             _passwordService = passwordService;
         }
 
-        // ==========================================
-        // REGISTER
-        // ==========================================
+        // REGISTER: Public registration always creates a normal User.
+        [AllowAnonymous]
         [HttpPost("register")]
-        public IActionResult Register(
-            [FromBody] RegisterRequest request)
+        public IActionResult Register([FromBody] RegisterRequest request)
         {
-            // Check if username already exists
+            if (string.IsNullOrWhiteSpace(request.Username) ||
+                string.IsNullOrWhiteSpace(request.Email) ||
+                string.IsNullOrWhiteSpace(request.Password))
+            {
+                return BadRequest("Username, email and password are required.");
+            }
+
+            var username = request.Username.Trim();
+            var email = request.Email.Trim();
+
             var existingUser = _context.Users
-                .FirstOrDefault(x => x.Username == request.Username);
+                .FirstOrDefault(x => x.Username == username);
 
             if (existingUser != null)
             {
-                return BadRequest("Username already exists");
+                return BadRequest("Username already exists.");
             }
 
-            // Hash the password
-            var passwordHash = _passwordService
-                .HashPassword(request.Password);
+            var passwordHash =
+                _passwordService.HashPassword(request.Password);
 
-            // Create user
             var user = new User
             {
-                Username = request.Username,
+                Username = username,
+                Email = email,
                 PasswordHash = passwordHash,
-                Email = request.Email,
-                Role = request.Role
+                Role = "User"
             };
 
-            // Save user in SQL Server
             _context.Users.Add(user);
             _context.SaveChanges();
 
             return Ok(new
             {
-                message = "User registered successfully",
+                message = "User registered successfully.",
                 username = user.Username
             });
         }
 
-        // ==========================================
         // GET CURRENT LOGGED-IN USER
-        // ==========================================
         [Authorize]
         [HttpGet("getuser")]
         public IActionResult GetUser()
         {
-            // Get UserId added by UserIdMiddleware
-            var userIdValue = HttpContext.Items["UserId"]?.ToString();
+            var userIdValue =
+                HttpContext.Items["UserId"]?.ToString();
 
-            if (string.IsNullOrEmpty(userIdValue))
-            {
-                return Unauthorized("User ID not found");
-            }
-
-            // Convert UserId to int
             if (!int.TryParse(userIdValue, out int userId))
             {
-                return Unauthorized("Invalid User ID");
+                return Unauthorized("Valid User ID was not found.");
             }
 
-            // Find user in database
             var user = _context.Users
                 .FirstOrDefault(x => x.Id == userId);
 
             if (user == null)
             {
-                return NotFound("User not found");
+                return NotFound("User not found.");
             }
 
-            // Return current logged-in user
             return Ok(new
             {
                 id = user.Id,
@@ -102,10 +97,8 @@ namespace Token2Core.Controllers
             });
         }
 
-        // ==========================================
-        // GET ALL USERS
-        // ==========================================
-        [Authorize]
+        // GET ALL USERS: ADMIN ONLY
+        [Authorize(Roles = "Admin")]
         [HttpGet("getallusers")]
         public IActionResult GetAllUsers()
         {
@@ -123,6 +116,8 @@ namespace Token2Core.Controllers
         }
     }
 }
+
+
 
 
 

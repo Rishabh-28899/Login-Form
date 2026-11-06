@@ -1,4 +1,5 @@
-﻿namespace WritePad.Model
+﻿
+namespace WritePad.Model
 {
     public class RegisterRequest
     {
@@ -7,8 +8,7 @@
         public string Password { get; set; } = string.Empty;
 
         public string Email { get; set; } = string.Empty;
-
-        public string Role { get; set; } = "User";
     }
 }
+
 

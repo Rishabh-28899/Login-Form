@@ -1,10 +1,11 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Token2Core.Data;
 using Writepad.Model;
 using WritePad.Model;
-using System.Security.Claims;
 
 namespace Token2Core.Controllers
 {
@@ -20,26 +21,37 @@ namespace Token2Core.Controllers
             _context = context;
         }
 
+        // Get the authenticated user's database ID from the JWT.
+        private bool TryGetUserId(out int userId)
+        {
+            userId = 0;
+
+            var userIdValue =
+                User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            return int.TryParse(userIdValue, out userId)
+                   && userId > 0;
+        }
+
         // ==========================================
         // CREATE NOTE
+        // POST: api/Notes
         // ==========================================
         [HttpPost]
-        public IActionResult CreateNote([FromBody] CreateNoteRequest request)
+        public async Task<IActionResult> CreateNote(
+            [FromBody] CreateNoteRequest request)
         {
-            // Get logged-in user's ID from middleware
-            var userIdValue = HttpContext.Items["UserId"]?.ToString();
-
-            if (string.IsNullOrEmpty(userIdValue))
+            if (!TryGetUserId(out int userId))
             {
-                return Unauthorized("User ID not found");
+                return Unauthorized("Invalid or missing user ID in token.");
             }
 
-            if (!int.TryParse(userIdValue, out int userId))
+            if (request == null ||
+                string.IsNullOrWhiteSpace(request.Title))
             {
-                return Unauthorized("Invalid User ID");
+                return BadRequest("Note title is required.");
             }
 
-            // Create note
             var note = new Note
             {
                 Title = request.Title,
@@ -50,7 +62,7 @@ namespace Token2Core.Controllers
             };
 
             _context.Notes.Add(note);
-            _context.SaveChanges();
+            await _context.SaveChangesAsync();
 
             return Ok(new
             {
@@ -64,84 +76,97 @@ namespace Token2Core.Controllers
 
         // ==========================================
         // GET MY NOTES
+        // GET: api/Notes
         // ==========================================
         [HttpGet]
-        public IActionResult GetMyNotes()
+        public async Task<IActionResult> GetMyNotes()
         {
-           // var userIdValue = HttpContext.Items["UserId"]?.ToString();
-            var userIdValue = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (string.IsNullOrEmpty(userIdValue))
+            if (!TryGetUserId(out int userId))
             {
-                return Unauthorized("User Id not found");
+                return Unauthorized("Invalid or missing user ID in token.");
             }
-            if (!int.TryParse(userIdValue, out int userId))
-            {
-                return Unauthorized("Invalid User Id");
 
-            }
-            var notes = _context.Notes.Where(x => x.UserId == userId).OrderByDescending(x => x.CreatedAt).ToList();
+            var notes = await _context.Notes
+                .Where(n => n.UserId == userId)
+                .OrderByDescending(n => n.CreatedAt)
+                .ToListAsync();
+
             return Ok(notes);
         }
-        [Authorize]
+
+        // ==========================================
+        // GET MY NOTES (ALL ROUTE USED BY REACT)
+        // GET: api/Notes/all
+        // ==========================================
         [HttpGet("all")]
-        public IActionResult GetAllNotes()
+        public async Task<IActionResult> GetAllNotes()
         {
-            var notes = _context.Notes.OrderByDescending(x => x.CreatedAt).ToList();
+            if (!TryGetUserId(out int userId))
+            {
+                return Unauthorized("Invalid or missing user ID in token.");
+            }
+
+            // CRITICAL: Return only this user's notes.
+            var notes = await _context.Notes
+                .Where(n => n.UserId == userId)
+                .OrderByDescending(n => n.CreatedAt)
+                .ToListAsync();
+
             return Ok(notes);
         }
-        [Authorize]
-        [HttpGet("{id}")]
-        public IActionResult GetNote(int id)
+
+        // ==========================================
+        // GET ONE NOTE
+        // GET: api/Notes/{id}
+        // ==========================================
+        [HttpGet("{id:int}")]
+        public async Task<IActionResult> GetNote(int id)
         {
-            var userIdValue = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-
-            if (string.IsNullOrEmpty(userIdValue))
+            if (!TryGetUserId(out int userId))
             {
-                return Unauthorized("User ID not found in token");
+                return Unauthorized("Invalid or missing user ID in token.");
             }
 
-            if (!int.TryParse(userIdValue, out int userId))
-            {
-                return Unauthorized("Invalid User ID");
-            }
-
-            var note = _context.Notes
-                .FirstOrDefault(x => x.Id == id && x.UserId == userId);
+            var note = await _context.Notes
+                .FirstOrDefaultAsync(n =>
+                    n.Id == id && n.UserId == userId);
 
             if (note == null)
             {
-                return NotFound("Note not found");
+                return NotFound("Note not found.");
             }
 
             return Ok(note);
-      
-        
         }
 
-        [Authorize]
-        [HttpPut("{id}")]
-        public IActionResult UpdateNote(
-    int id,
-        [FromBody] UpdateNoteRequest request)
+        // ==========================================
+        // UPDATE NOTE
+        // PUT: api/Notes/{id}
+        // ==========================================
+        [HttpPut("{id:int}")]
+        public async Task<IActionResult> UpdateNote(
+            int id,
+            [FromBody] UpdateNoteRequest request)
         {
-            var userIdValue = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-
-            if (string.IsNullOrEmpty(userIdValue))
+            if (!TryGetUserId(out int userId))
             {
-                return Unauthorized("User ID not found in token");
+                return Unauthorized("Invalid or missing user ID in token.");
             }
 
-            if (!int.TryParse(userIdValue, out int userId))
+            if (request == null ||
+                string.IsNullOrWhiteSpace(request.Title))
             {
-                return Unauthorized("Invalid User ID");
+                return BadRequest("Note title is required.");
             }
 
-            var note = _context.Notes
-                .FirstOrDefault(x => x.Id == id && x.UserId == userId);
+            // Only find a note owned by the current user.
+            var note = await _context.Notes
+                .FirstOrDefaultAsync(n =>
+                    n.Id == id && n.UserId == userId);
 
             if (note == null)
             {
-                return NotFound("Note not found");
+                return NotFound("Note not found.");
             }
 
             note.Title = request.Title;
@@ -149,7 +174,7 @@ namespace Token2Core.Controllers
             note.Topic = request.Topic;
             note.UpdatedAt = DateTime.UtcNow;
 
-            _context.SaveChanges();
+            await _context.SaveChangesAsync();
 
             return Ok(new
             {
@@ -157,32 +182,31 @@ namespace Token2Core.Controllers
                 noteId = note.Id
             });
         }
-        [Authorize]
-        [HttpDelete("{id}")]
-        public IActionResult DeleteNote(int id)
+
+        // ==========================================
+        // DELETE NOTE
+        // DELETE: api/Notes/{id}
+        // ==========================================
+        [HttpDelete("{id:int}")]
+        public async Task<IActionResult> DeleteNote(int id)
         {
-            var userIdValue = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-
-            if (string.IsNullOrEmpty(userIdValue))
+            if (!TryGetUserId(out int userId))
             {
-                return Unauthorized("User ID not found in token");
+                return Unauthorized("Invalid or missing user ID in token.");
             }
 
-            if (!int.TryParse(userIdValue, out int userId))
-            {
-                return Unauthorized("Invalid User ID");
-            }
-
-            var note = _context.Notes
-                .FirstOrDefault(x => x.Id == id && x.UserId == userId);
+            // Only find a note owned by the current user.
+            var note = await _context.Notes
+                .FirstOrDefaultAsync(n =>
+                    n.Id == id && n.UserId == userId);
 
             if (note == null)
             {
-                return NotFound("Note not found");
+                return NotFound("Note not found.");
             }
 
             _context.Notes.Remove(note);
-            _context.SaveChanges();
+            await _context.SaveChangesAsync();
 
             return Ok(new
             {
@@ -191,3 +215,4 @@ namespace Token2Core.Controllers
         }
     }
 }
+
