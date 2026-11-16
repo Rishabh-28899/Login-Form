@@ -9,7 +9,7 @@ namespace WritePad.Services
     {
        
         
-            private readonly PasswordHasher<object> _passwordHasher;
+            private readonly PasswordHasher<object> _passwordHasher; 
 
         public PasswordService()
         {

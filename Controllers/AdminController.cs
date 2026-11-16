@@ -2,7 +2,10 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.ComponentModel.DataAnnotations;
 using Token2Core.Data;
+using WritePad.Model;
+using WritePad.Services;
 
 namespace Token2Core.Controllers
 {
@@ -12,10 +15,14 @@ namespace Token2Core.Controllers
     public class AdminController : ControllerBase
     {
         private readonly TokenDbContext _context;
+        private readonly PasswordService _passwordService;
 
-        public AdminController(TokenDbContext context)
+        public AdminController(
+            TokenDbContext context,
+            PasswordService passwordService)
         {
             _context = context;
+            _passwordService = passwordService;
         }
 
         // =====================================
@@ -59,15 +66,13 @@ namespace Token2Core.Controllers
 
             var totalNotes = await _context.Notes.CountAsync();
 
-            var dashboard = new
+            return Ok(new
             {
                 TotalUsers = totalUsers,
                 TotalAdmins = totalAdmins,
                 RegularUsers = regularUsers,
                 TotalNotes = totalNotes
-            };
-
-            return Ok(dashboard);
+            });
         }
 
         // =====================================
@@ -95,6 +100,97 @@ namespace Token2Core.Controllers
                 .ToListAsync();
 
             return Ok(notes);
+        }
+
+        // =====================================
+        // 4. ADD NEW USER
+        // POST: api/Admin/users
+        // =====================================
+
+        public class AddUserRequest
+        {
+            [Required]
+            [StringLength(50, MinimumLength = 3)]
+            public string Username { get; set; } = string.Empty;
+
+            [Required]
+            [EmailAddress]
+            public string Email { get; set; } = string.Empty;
+
+            [Required]
+            [MinLength(8)]
+            public string Password { get; set; } = string.Empty;
+
+            [Required]
+            public string Role { get; set; } = "User";
+        }
+
+        [HttpPost("users")]
+        public async Task<IActionResult> AddUser(
+            [FromBody] AddUserRequest request)
+        {
+            // Check duplicate username
+            var usernameExists = await _context.Users
+                .AnyAsync(u => u.Username == request.Username.Trim());
+
+            if (usernameExists)
+            {
+                return BadRequest(new
+                {
+                    message = "Username already exists."
+                });
+            }
+
+            // Check duplicate email
+            var emailExists = await _context.Users
+                .AnyAsync(u => u.Email == request.Email.Trim());
+
+            if (emailExists)
+            {
+                return BadRequest(new
+                {
+                    message = "Email already exists."
+                });
+            }
+
+            // Validate role
+            if (request.Role != "User" &&
+                request.Role != "Admin")
+            {
+                return BadRequest(new
+                {
+                    message = "Invalid role."
+                });
+            }
+
+            // Create user
+            var user = new User
+            {
+                Username = request.Username.Trim(),
+                Email = request.Email.Trim(),
+                Role = request.Role
+            };
+
+            // Hash password using existing PasswordService
+            user.PasswordHash =
+                _passwordService.HashPassword(request.Password);
+
+            // Save to database
+            _context.Users.Add(user);
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new
+            {
+                message = "User created successfully!",
+                user = new
+                {
+                    user.Id,
+                    user.Username,
+                    user.Email,
+                    user.Role
+                }
+            });
         }
     }
 }
