@@ -15,13 +15,17 @@ namespace Token2Core.Controllers
     public class NotesController : ControllerBase
     {
         private readonly TokenDbContext _context;
+        private readonly ILogger<NotesController> _logger;
 
-        public NotesController(TokenDbContext context)
+        public NotesController(
+            TokenDbContext context,
+            ILogger<NotesController> logger)
         {
             _context = context;
+            _logger = logger;
         }
 
-        // Get the authenticated user's database ID from the JWT.
+        // Get authenticated user's database ID from JWT.
         private bool TryGetUserId(out int userId)
         {
             userId = 0;
@@ -29,26 +33,34 @@ namespace Token2Core.Controllers
             var userIdValue =
                 User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
-            return int.TryParse(userIdValue, out userId)
-                   && userId > 0;
+            var isValid = int.TryParse(userIdValue, out userId)
+                          && userId > 0;
+
+            if (!isValid)
+            {
+                _logger.LogWarning(
+                    "Invalid or missing UserId in authentication token.");
+            }
+
+            return isValid;
         }
 
-        // ==========================================
         // CREATE NOTE
         // POST: api/Notes
-        // ==========================================
         [HttpPost]
         public async Task<IActionResult> CreateNote(
             [FromBody] CreateNoteRequest request)
         {
             if (!TryGetUserId(out int userId))
-            {
                 return Unauthorized("Invalid or missing user ID in token.");
-            }
 
             if (request == null ||
                 string.IsNullOrWhiteSpace(request.Title))
             {
+                _logger.LogWarning(
+                    "Create note failed: Title is missing. UserId: {UserId}",
+                    userId);
+
                 return BadRequest("Note title is required.");
             }
 
@@ -64,6 +76,10 @@ namespace Token2Core.Controllers
             _context.Notes.Add(note);
             await _context.SaveChangesAsync();
 
+            _logger.LogInformation(
+                "Note created successfully. NoteId: {NoteId}, UserId: {UserId}",
+                note.Id, userId);
+
             return Ok(new
             {
                 message = "Note created successfully",
@@ -74,58 +90,53 @@ namespace Token2Core.Controllers
             });
         }
 
-        // ==========================================
         // GET MY NOTES
         // GET: api/Notes
-        // ==========================================
         [HttpGet]
         public async Task<IActionResult> GetMyNotes()
         {
             if (!TryGetUserId(out int userId))
-            {
                 return Unauthorized("Invalid or missing user ID in token.");
-            }
 
             var notes = await _context.Notes
                 .Where(n => n.UserId == userId)
                 .OrderByDescending(n => n.CreatedAt)
                 .ToListAsync();
 
+            _logger.LogInformation(
+                "Retrieved {Count} notes for UserId: {UserId}",
+                notes.Count, userId);
+
             return Ok(notes);
         }
 
-        // ==========================================
-        // GET MY NOTES (ALL ROUTE USED BY REACT)
+        // GET MY NOTES (REACT ROUTE)
         // GET: api/Notes/all
-        // ==========================================
         [HttpGet("all")]
         public async Task<IActionResult> GetAllNotes()
         {
             if (!TryGetUserId(out int userId))
-            {
                 return Unauthorized("Invalid or missing user ID in token.");
-            }
 
-            // CRITICAL: Return only this user's notes.
             var notes = await _context.Notes
                 .Where(n => n.UserId == userId)
                 .OrderByDescending(n => n.CreatedAt)
                 .ToListAsync();
 
+            _logger.LogInformation(
+                "Retrieved all notes. Count: {Count}, UserId: {UserId}",
+                notes.Count, userId);
+
             return Ok(notes);
         }
 
-        // ==========================================
         // GET ONE NOTE
         // GET: api/Notes/{id}
-        // ==========================================
         [HttpGet("{id:int}")]
         public async Task<IActionResult> GetNote(int id)
         {
             if (!TryGetUserId(out int userId))
-            {
                 return Unauthorized("Invalid or missing user ID in token.");
-            }
 
             var note = await _context.Notes
                 .FirstOrDefaultAsync(n =>
@@ -133,39 +144,50 @@ namespace Token2Core.Controllers
 
             if (note == null)
             {
+                _logger.LogWarning(
+                    "Note not found. NoteId: {NoteId}, UserId: {UserId}",
+                    id, userId);
+
                 return NotFound("Note not found.");
             }
+
+            _logger.LogInformation(
+                "Note retrieved successfully. NoteId: {NoteId}, UserId: {UserId}",
+                id, userId);
 
             return Ok(note);
         }
 
-        // ==========================================
         // UPDATE NOTE
         // PUT: api/Notes/{id}
-        // ==========================================
         [HttpPut("{id:int}")]
         public async Task<IActionResult> UpdateNote(
             int id,
             [FromBody] UpdateNoteRequest request)
         {
             if (!TryGetUserId(out int userId))
-            {
                 return Unauthorized("Invalid or missing user ID in token.");
-            }
 
             if (request == null ||
                 string.IsNullOrWhiteSpace(request.Title))
             {
+                _logger.LogWarning(
+                    "Update note failed: Title is missing. NoteId: {NoteId}, UserId: {UserId}",
+                    id, userId);
+
                 return BadRequest("Note title is required.");
             }
 
-            // Only find a note owned by the current user.
             var note = await _context.Notes
                 .FirstOrDefaultAsync(n =>
                     n.Id == id && n.UserId == userId);
 
             if (note == null)
             {
+                _logger.LogWarning(
+                    "Update failed: Note not found. NoteId: {NoteId}, UserId: {UserId}",
+                    id, userId);
+
                 return NotFound("Note not found.");
             }
 
@@ -176,6 +198,10 @@ namespace Token2Core.Controllers
 
             await _context.SaveChangesAsync();
 
+            _logger.LogInformation(
+                "Note updated successfully. NoteId: {NoteId}, UserId: {UserId}",
+                id, userId);
+
             return Ok(new
             {
                 message = "Note updated successfully",
@@ -183,30 +209,33 @@ namespace Token2Core.Controllers
             });
         }
 
-        // ==========================================
         // DELETE NOTE
         // DELETE: api/Notes/{id}
-        // ==========================================
         [HttpDelete("{id:int}")]
         public async Task<IActionResult> DeleteNote(int id)
         {
             if (!TryGetUserId(out int userId))
-            {
                 return Unauthorized("Invalid or missing user ID in token.");
-            }
 
-            // Only find a note owned by the current user.
             var note = await _context.Notes
                 .FirstOrDefaultAsync(n =>
                     n.Id == id && n.UserId == userId);
 
             if (note == null)
             {
+                _logger.LogWarning(
+                    "Delete failed: Note not found. NoteId: {NoteId}, UserId: {UserId}",
+                    id, userId);
+
                 return NotFound("Note not found.");
             }
 
             _context.Notes.Remove(note);
             await _context.SaveChangesAsync();
+
+            _logger.LogInformation(
+                "Note deleted successfully. NoteId: {NoteId}, UserId: {UserId}",
+                id, userId);
 
             return Ok(new
             {

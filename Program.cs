@@ -1,4 +1,3 @@
-
 using System.Text;
 using System.Security.Claims;
 
@@ -11,7 +10,26 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
+using Serilog;
+
+// ===============================
+// SERILOG CONFIGURATION
+// ===============================
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Information()
+    .Enrich.FromLogContext()
+    .WriteTo.Console()
+    .WriteTo.File(
+        "Logs/writepad-.log",
+        rollingInterval: RollingInterval.Day,
+        retainedFileCountLimit: 30
+    )
+    .CreateLogger();
+
 var builder = WebApplication.CreateBuilder(args);
+
+// Integrate Serilog with ASP.NET Core
+builder.Host.UseSerilog();
 
 // ===============================
 // CONTROLLERS
@@ -69,15 +87,14 @@ builder.Services
             NameClaimType = ClaimTypes.Name
         };
 
-        // TEMPORARY: Display JWT authentication errors
         options.Events = new JwtBearerEvents
         {
             OnAuthenticationFailed = context =>
             {
-                Console.WriteLine("=================================");
-                Console.WriteLine("JWT AUTHENTICATION FAILED");
-                Console.WriteLine(context.Exception.Message);
-                Console.WriteLine("=================================");
+                Log.Warning(
+                    context.Exception,
+                    "JWT authentication failed"
+                );
 
                 return Task.CompletedTask;
             }
@@ -105,6 +122,11 @@ builder.Services.AddAuthorization();
 var app = builder.Build();
 
 // ===============================
+// REQUEST LOGGING
+// ===============================
+app.UseSerilogRequestLogging();
+
+// ===============================
 // MIDDLEWARE PIPELINE
 // ===============================
 app.UseHttpsRedirection();
@@ -130,7 +152,11 @@ await AdminSeeder.SeedAdminAsync(app.Services);
 // ===============================
 // RUN APPLICATION
 // ===============================
+Log.Information("WritePad API is starting");
+
 app.Run();
+
+Log.CloseAndFlush();
 
 
 
