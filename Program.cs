@@ -1,16 +1,15 @@
-using System.Text;
-using System.Security.Claims;
-
-using WritePad.Services;
-using Token2Core.Middleware;
-using Token2Core.Data;
-using WritePad.Data;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-
 using Serilog;
+using Serilog.Context;
+using System.Security.Claims;
+using System.Text;
+using Token2Core.Data;
+using Token2Core.Middleware;
+using WritePad.Data;
+using WritePad.Services;
 
 // ===============================
 // SERILOG CONFIGURATION
@@ -18,17 +17,21 @@ using Serilog;
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Information()
     .Enrich.FromLogContext()
-    .WriteTo.Console()
+    .WriteTo.Console(
+        outputTemplate:
+        "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj} {Properties:j}{NewLine}{Exception}"
+    )
     .WriteTo.File(
         "Logs/writepad-.log",
         rollingInterval: RollingInterval.Day,
-        retainedFileCountLimit: 30
+        retainedFileCountLimit: 30,
+        outputTemplate:
+        "[{Timestamp:yyyy-MM-dd HH:mm:ss} {Level:u3}] {Message:lj} {Properties:j}{NewLine}{Exception}"
     )
     .CreateLogger();
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Integrate Serilog with ASP.NET Core
 builder.Host.UseSerilog();
 
 // ===============================
@@ -51,7 +54,8 @@ builder.Services.AddCors(options =>
         policy
             .WithOrigins("http://localhost:5173")
             .AllowAnyHeader()
-            .AllowAnyMethod();
+            .AllowAnyMethod()
+            .WithExposedHeaders("X-Correlation-ID");
     });
 });
 
@@ -62,30 +66,33 @@ var jwtKey = builder.Configuration["Jwt:Key"];
 
 if (string.IsNullOrWhiteSpace(jwtKey))
 {
-    throw new InvalidOperationException("JWT Key is missing from configuration.");
+    throw new InvalidOperationException(
+        "JWT Key is missing from configuration."
+    );
 }
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
+        options.TokenValidationParameters =
+            new TokenValidationParameters
+            {
+                ValidateIssuer = true,
+                ValidateAudience = true,
+                ValidateLifetime = true,
+                ValidateIssuerSigningKey = true,
 
-            ValidIssuer = builder.Configuration["Jwt:Issuer"],
-            ValidAudience = builder.Configuration["Jwt:Audience"],
+                ValidIssuer = builder.Configuration["Jwt:Issuer"],
+                ValidAudience = builder.Configuration["Jwt:Audience"],
 
-            IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(jwtKey)
-            ),
+                IssuerSigningKey = new SymmetricSecurityKey(
+                    Encoding.UTF8.GetBytes(jwtKey)
+                ),
 
-            RoleClaimType = ClaimTypes.Role,
-            NameClaimType = ClaimTypes.Name
-        };
+                RoleClaimType = ClaimTypes.Role,
+                NameClaimType = ClaimTypes.Name
+            };
 
         options.Events = new JwtBearerEvents
         {
@@ -121,22 +128,76 @@ builder.Services.AddAuthorization();
 // ===============================
 var app = builder.Build();
 
+Log.Information(
+    "Current environment: {Environment}",
+    app.Environment.EnvironmentName
+);
+
 // ===============================
-// REQUEST LOGGING
+// CORRELATION ID MIDDLEWARE
+// ===============================
+app.Use(async (context, next) =>
+{
+    // Generate unique ID for every request
+    var correlationId = Guid.NewGuid().ToString();
+
+    // Assign ID to current request
+    context.TraceIdentifier = correlationId;
+
+    // Add ID to Serilog logging context
+    using (LogContext.PushProperty("CorrelationId", correlationId))
+    {
+        Log.Information(
+            "CORRELATION MIDDLEWARE EXECUTED: {CorrelationId}",
+            correlationId
+        );
+
+        // Add ID to HTTP response header
+        context.Response.OnStarting(() =>
+        {
+            context.Response.Headers["X-Correlation-ID"] =
+                correlationId;
+
+            return Task.CompletedTask;
+        });
+
+        await next();
+    }
+});
+
+// ===============================
+// SERILOG REQUEST LOGGING
 // ===============================
 app.UseSerilogRequestLogging();
 
 // ===============================
-// MIDDLEWARE PIPELINE
+// GLOBAL EXCEPTION HANDLING
+// ===============================
+app.UseMiddleware<GlobalExceptionMiddleware>();
+
+// ===============================
+// HTTPS REDIRECTION
 // ===============================
 app.UseHttpsRedirection();
 
+// ===============================
+// CORS
+// ===============================
 app.UseCors("ReactPolicy");
 
+// ===============================
+// JWT AUTHENTICATION
+// ===============================
 app.UseAuthentication();
 
+// ===============================
+// USER ID MIDDLEWARE
+// ===============================
 app.UseMiddleware<UserIdMiddleware>();
 
+// ===============================
+// AUTHORIZATION
+// ===============================
 app.UseAuthorization();
 
 // ===============================
@@ -154,9 +215,15 @@ await AdminSeeder.SeedAdminAsync(app.Services);
 // ===============================
 Log.Information("WritePad API is starting");
 
-app.Run();
+try
+{
+    app.Run();
+}
+finally
+{
+    Log.CloseAndFlush();
+}
 
-Log.CloseAndFlush();
 
 
 

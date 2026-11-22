@@ -242,6 +242,7 @@ namespace Token2Core.Controllers
                 message = "Note deleted successfully"
             });
         }
+     
     }
 }
 
