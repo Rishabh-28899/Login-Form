@@ -6,8 +6,10 @@ using Serilog;
 using Serilog.Context;
 using System.Security.Claims;
 using System.Text;
+using FluentValidation;
 using Token2Core.Data;
 using Token2Core.Middleware;
+using Token2Core.Validators;
 using WritePad.Data;
 using WritePad.Services;
 
@@ -30,7 +32,7 @@ Log.Logger = new LoggerConfiguration()
     )
     .CreateLogger();
 
-var builder = WebApplication.CreateBuilder(args);
+var builder = WebApplication.CreateBuilder(args); 
 
 builder.Host.UseSerilog();
 
@@ -38,6 +40,12 @@ builder.Host.UseSerilog();
 // CONTROLLERS
 // ===============================
 builder.Services.AddControllers();
+
+// ===============================
+// FLUENT VALIDATION
+// ===============================
+//builder.Services.AddValidatorsFromAssemblyContaining<NoteValidator>();
+builder.Services.AddValidatorsFromAssemblyContaining<CreateNoteRequestValidator>();
 
 // ===============================
 // PASSWORD SERVICE
@@ -138,13 +146,10 @@ Log.Information(
 // ===============================
 app.Use(async (context, next) =>
 {
-    // Generate unique ID for every request
     var correlationId = Guid.NewGuid().ToString();
 
-    // Assign ID to current request
     context.TraceIdentifier = correlationId;
 
-    // Add ID to Serilog logging context
     using (LogContext.PushProperty("CorrelationId", correlationId))
     {
         Log.Information(
@@ -152,7 +157,6 @@ app.Use(async (context, next) =>
             correlationId
         );
 
-        // Add ID to HTTP response header
         context.Response.OnStarting(() =>
         {
             context.Response.Headers["X-Correlation-ID"] =

@@ -1,9 +1,11 @@
 ﻿
 using System.Security.Claims;
+using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Token2Core.Data;
+using Token2Core.Validators;
 using Writepad.Model;
 using WritePad.Model;
 
@@ -17,15 +19,22 @@ namespace Token2Core.Controllers
         private readonly TokenDbContext _context;
         private readonly ILogger<NotesController> _logger;
 
+        private readonly IValidator<CreateNoteRequest> _createValidator;
+        private readonly IValidator<UpdateNoteRequest> _updateValidator;
+
         public NotesController(
             TokenDbContext context,
-            ILogger<NotesController> logger)
+            ILogger<NotesController> logger,
+            IValidator<CreateNoteRequest> createValidator,
+            IValidator<UpdateNoteRequest> updateValidator)
         {
             _context = context;
             _logger = logger;
+            _createValidator = createValidator;
+            _updateValidator = updateValidator;
         }
 
-        // Get authenticated user's database ID from JWT.
+        // GET AUTHENTICATED USER ID
         private bool TryGetUserId(out int userId)
         {
             userId = 0;
@@ -54,14 +63,25 @@ namespace Token2Core.Controllers
             if (!TryGetUserId(out int userId))
                 return Unauthorized("Invalid or missing user ID in token.");
 
-            if (request == null ||
-                string.IsNullOrWhiteSpace(request.Title))
+            // FLUENT VALIDATION
+            var validationResult =
+                await _createValidator.ValidateAsync(request);
+
+            if (!validationResult.IsValid)
             {
                 _logger.LogWarning(
-                    "Create note failed: Title is missing. UserId: {UserId}",
+                    "Create note validation failed. UserId: {UserId}",
                     userId);
 
-                return BadRequest("Note title is required.");
+                return BadRequest(new
+                {
+                    message = "Validation failed.",
+                    errors = validationResult.Errors.Select(error => new
+                    {
+                        field = error.PropertyName,
+                        error = error.ErrorMessage
+                    })
+                });
             }
 
             var note = new Note
@@ -110,7 +130,7 @@ namespace Token2Core.Controllers
             return Ok(notes);
         }
 
-        // GET MY NOTES (REACT ROUTE)
+        // GET MY NOTES
         // GET: api/Notes/all
         [HttpGet("all")]
         public async Task<IActionResult> GetAllNotes()
@@ -168,14 +188,25 @@ namespace Token2Core.Controllers
             if (!TryGetUserId(out int userId))
                 return Unauthorized("Invalid or missing user ID in token.");
 
-            if (request == null ||
-                string.IsNullOrWhiteSpace(request.Title))
+            // FLUENT VALIDATION
+            var validationResult =
+                await _updateValidator.ValidateAsync(request);
+
+            if (!validationResult.IsValid)
             {
                 _logger.LogWarning(
-                    "Update note failed: Title is missing. NoteId: {NoteId}, UserId: {UserId}",
+                    "Update note validation failed. NoteId: {NoteId}, UserId: {UserId}",
                     id, userId);
 
-                return BadRequest("Note title is required.");
+                return BadRequest(new
+                {
+                    message = "Validation failed.",
+                    errors = validationResult.Errors.Select(error => new
+                    {
+                        field = error.PropertyName,
+                        error = error.ErrorMessage
+                    })
+                });
             }
 
             var note = await _context.Notes
@@ -242,7 +273,6 @@ namespace Token2Core.Controllers
                 message = "Note deleted successfully"
             });
         }
-     
     }
 }
 
