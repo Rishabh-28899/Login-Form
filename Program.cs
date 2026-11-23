@@ -32,7 +32,7 @@ Log.Logger = new LoggerConfiguration()
     )
     .CreateLogger();
 
-var builder = WebApplication.CreateBuilder(args); 
+var builder = WebApplication.CreateBuilder(args);
 
 builder.Host.UseSerilog();
 
@@ -44,7 +44,6 @@ builder.Services.AddControllers();
 // ===============================
 // FLUENT VALIDATION
 // ===============================
-//builder.Services.AddValidatorsFromAssemblyContaining<NoteValidator>();
 builder.Services.AddValidatorsFromAssemblyContaining<CreateNoteRequestValidator>();
 
 // ===============================
@@ -212,7 +211,10 @@ app.MapControllers();
 // ===============================
 // CREATE ADMIN ACCOUNT
 // ===============================
-await AdminSeeder.SeedAdminAsync(app.Services);
+if (!app.Environment.IsEnvironment("Testing"))
+{
+    await AdminSeeder.SeedAdminAsync(app.Services);
+}
 
 // ===============================
 // RUN APPLICATION
@@ -227,6 +229,14 @@ finally
 {
     Log.CloseAndFlush();
 }
+
+// ===============================
+// MAKE PROGRAM ACCESSIBLE TO TEST PROJECT
+// ===============================
+public partial class Program
+{
+}
+
 
 
 
