@@ -1,13 +1,14 @@
 ﻿
+using Azure.Core;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using Token2Core.Data;
 using WritePad.Model;
 using WritePad.Services;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.IdentityModel.Tokens;
-using Token2Core.Data;
 
 namespace Token2Core.Controllers;
 
@@ -17,7 +18,7 @@ public class AuthController : ControllerBase
 {
     private readonly IConfiguration _configuration;
     private readonly TokenDbContext _context;
-    private readonly PasswordService _passwordService;
+    private readonly PasswordService _passwordService; 
 
     public AuthController(
         IConfiguration configuration,

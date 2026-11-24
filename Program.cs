@@ -1,11 +1,13 @@
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using Serilog.Context;
 using System.Security.Claims;
 using System.Text;
+using System.Threading.RateLimiting;
 using FluentValidation;
 using Token2Core.Data;
 using Token2Core.Middleware;
@@ -40,6 +42,34 @@ builder.Host.UseSerilog();
 // CONTROLLERS
 // ===============================
 builder.Services.AddControllers();
+
+// ===============================
+// RATE LIMITING
+// ===============================
+builder.Services.AddRateLimiter(options =>
+{
+    options.GlobalLimiter =
+        PartitionedRateLimiter.Create<HttpContext, string>(
+            httpContext =>
+            {
+                var ipAddress =
+                    httpContext.Connection.RemoteIpAddress?.ToString()
+                    ?? "unknown";
+
+                return RateLimitPartition.GetFixedWindowLimiter(
+                    ipAddress,
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 60,
+                        Window = TimeSpan.FromMinutes(1),
+                        QueueLimit = 0,
+                        AutoReplenishment = true
+                    });
+            });
+
+    options.RejectionStatusCode =
+        StatusCodes.Status429TooManyRequests;
+});
 
 // ===============================
 // FLUENT VALIDATION
@@ -187,6 +217,11 @@ app.UseHttpsRedirection();
 // CORS
 // ===============================
 app.UseCors("ReactPolicy");
+
+// ===============================
+// RATE LIMITING MIDDLEWARE
+// ===============================
+app.UseRateLimiter();
 
 // ===============================
 // JWT AUTHENTICATION
