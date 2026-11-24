@@ -4,10 +4,12 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Claims;
 using System.IdentityModel.Tokens.Jwt;
+
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+
 using Xunit;
 using WritePad.Tests.Infrastructure;
 
@@ -30,10 +32,12 @@ public class ApiTestGetNoteById
         _validationParameters = jwtOptions.TokenValidationParameters;
     }
 
-    private string GenerateJwtToken()
+    // Generate JWT Token for a specific user
+    private string GenerateJwtToken(string userId)
     {
         var key = _validationParameters.IssuerSigningKey
-            ?? throw new InvalidOperationException("JWT signing key not found.");
+            ?? throw new InvalidOperationException(
+                "JWT signing key not found.");
 
         var credentials = new SigningCredentials(
             key,
@@ -41,7 +45,7 @@ public class ApiTestGetNoteById
 
         var claims = new[]
         {
-            new Claim(ClaimTypes.NameIdentifier, "1002"),
+            new Claim(ClaimTypes.NameIdentifier, userId),
             new Claim(ClaimTypes.Name, "testuser")
         };
 
@@ -55,15 +59,18 @@ public class ApiTestGetNoteById
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
+    // Test: Get note by ID with valid token
+    // Expected: 200 OK
     [Fact]
     public async Task Get_Note_By_Id_With_Valid_Token_Should_Return_Ok()
     {
         // Arrange
-        var token = GenerateJwtToken();
+        var token = GenerateJwtToken("1002");
 
         _client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", token);
 
+        // Create a note
         var createResponse = await _client.PostAsJsonAsync(
             "/api/Notes",
             new
@@ -75,11 +82,12 @@ public class ApiTestGetNoteById
 
         Assert.Equal(HttpStatusCode.OK, createResponse.StatusCode);
 
-        var createdNote = await createResponse.Content.ReadFromJsonAsync<CreateNoteResponse>();
+        var createdNote = await createResponse.Content
+            .ReadFromJsonAsync<CreateNoteResponse>();
 
         Assert.NotNull(createdNote);
 
-        // Act
+        // Act: Get the created note
         var response = await _client.GetAsync(
             $"/api/Notes/{createdNote.noteId}");
 
@@ -87,6 +95,44 @@ public class ApiTestGetNoteById
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
+    [Fact]
+    public async Task User_Cannot_Access_Another_Users_Note()
+    {
+        // Arrange: User 1002 creates a note
+        var user1Token = GenerateJwtToken("1002");
+
+        _client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", user1Token);
+
+        var createResponse = await _client.PostAsJsonAsync(
+            "/api/Notes",
+            new
+            {
+                Title = "Private Note",
+                Content = "This belongs to User 1002",
+                Topic = "Security"
+            });
+
+        Assert.Equal(HttpStatusCode.OK, createResponse.StatusCode);
+
+        var createdNote = await createResponse.Content
+            .ReadFromJsonAsync<CreateNoteResponse>();
+
+        Assert.NotNull(createdNote);
+
+        // Act: User 2002 tries to access User 1002's note
+        var user2Token = GenerateJwtToken("2002");
+
+        _client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", user2Token);
+
+        var response = await _client.GetAsync(
+            $"/api/Notes/{createdNote.noteId}");
+
+        // Assert: Access should be denied
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+    // Response model
     private class CreateNoteResponse
     {
         public int noteId { get; set; }
