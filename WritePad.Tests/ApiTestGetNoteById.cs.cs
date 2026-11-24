@@ -132,6 +132,86 @@ public class ApiTestGetNoteById
         // Assert: Access should be denied
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
+    [Fact]
+    public async Task User_Cannot_Update_Another_Users_Note()
+    {
+        // Arrange: User 1002 creates a note
+        var user1Token = GenerateJwtToken("1002");
+
+        _client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", user1Token);
+
+        var createResponse = await _client.PostAsJsonAsync(
+            "/api/Notes",
+            new
+            {
+                Title = "Private Note",
+                Content = "This belongs to User 1002",
+                Topic = "Security"
+            });
+
+        Assert.Equal(HttpStatusCode.OK, createResponse.StatusCode);
+
+        var createdNote = await createResponse.Content
+            .ReadFromJsonAsync<CreateNoteResponse>();
+
+        Assert.NotNull(createdNote);
+
+        // Act: User 2002 tries to update User 1002's note
+        var user2Token = GenerateJwtToken("2002");
+
+        _client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", user2Token);
+
+        var updateResponse = await _client.PutAsJsonAsync(
+            $"/api/Notes/{createdNote.noteId}",
+            new
+            {
+                Title = "Hacked Note",
+                Content = "Trying to update another user's note",
+                Topic = "Unauthorized"
+            });
+
+        // Assert: User 2002 should not be allowed to update it
+        Assert.Equal(HttpStatusCode.NotFound, updateResponse.StatusCode);
+    }
+    [Fact]
+    public async Task User_Cannot_Delete_Another_Users_Note()
+    {
+        // Arrange: User 1002 creates a note
+        var user1Token = GenerateJwtToken("1002");
+
+        _client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", user1Token);
+
+        var createResponse = await _client.PostAsJsonAsync(
+            "/api/Notes",
+            new
+            {
+                Title = "Private Note",
+                Content = "This belongs to User 1002",
+                Topic = "Security"
+            });
+
+        Assert.Equal(HttpStatusCode.OK, createResponse.StatusCode);
+
+        var createdNote = await createResponse.Content
+            .ReadFromJsonAsync<CreateNoteResponse>();
+
+        Assert.NotNull(createdNote);
+
+        // Act: User 2002 tries to delete User 1002's note
+        var user2Token = GenerateJwtToken("2002");
+
+        _client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", user2Token);
+
+        var deleteResponse = await _client.DeleteAsync(
+            $"/api/Notes/{createdNote.noteId}");
+
+        // Assert: User 2002 should not be allowed to delete it
+        Assert.Equal(HttpStatusCode.NotFound, deleteResponse.StatusCode);
+    }
     // Response model
     private class CreateNoteResponse
     {
