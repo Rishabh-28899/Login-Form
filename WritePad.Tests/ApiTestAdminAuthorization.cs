@@ -1,15 +1,14 @@
-﻿using System.Net;
-using System.Net.Http.Headers;
-using System.Security.Claims;
-using System.IdentityModel.Tokens.Jwt;
-
-using Microsoft.AspNetCore.Authentication.JwtBearer;
+﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
-
-using Xunit;
+using System.IdentityModel.Tokens.Jwt;
+using System.Net;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Security.Claims;
 using WritePad.Tests.Infrastructure;
+using Xunit;
 
 namespace WritePad.Tests;
 
@@ -135,6 +134,54 @@ public class ApiTestAdminAuthorization
         var response = await _client.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+    [Fact]
+    public async Task Admin_Can_Create_New_User()
+    {
+        var token = GenerateJwtToken("Admin");
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            "/api/Admin/users");
+
+        request.Headers.Authorization =
+            new AuthenticationHeaderValue("Bearer", token);
+
+        request.Content = JsonContent.Create(new
+        {
+            Username = "testuser123",
+            Email = "testuser123@example.com",
+            Password = "Test@12345",
+            Role = "User"
+        });
+
+        var response = await _client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+    [Fact]
+    public async Task Regular_User_Cannot_Create_New_User()
+    {
+        var token = GenerateJwtToken("User");
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            "/api/Admin/users");
+
+        request.Headers.Authorization =
+            new AuthenticationHeaderValue("Bearer", token);
+
+        request.Content = JsonContent.Create(new
+        {
+            Username = "testuser456",
+            Email = "testuser456@example.com",
+            Password = "Test@12345",
+            Role = "User"
+        });
+
+        var response = await _client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 }
 
