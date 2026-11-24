@@ -39,6 +39,15 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Host.UseSerilog();
 
 // ===============================
+// USER SECRETS DIAGNOSTICS
+// ===============================
+Console.WriteLine("================================");
+Console.WriteLine($"Environment: {builder.Environment.EnvironmentName}");
+Console.WriteLine($"JWT Key loaded: {!string.IsNullOrEmpty(builder.Configuration["Jwt:Key"])}");
+Console.WriteLine($"Connection string loaded: {!string.IsNullOrEmpty(builder.Configuration.GetConnectionString("DefaultConnection"))}");
+Console.WriteLine("================================");
+
+// ===============================
 // CONTROLLERS
 // ===============================
 builder.Services.AddControllers();
@@ -96,15 +105,35 @@ builder.Services.AddCors(options =>
     });
 });
 
+
 // ===============================
 // JWT AUTHENTICATION
 // ===============================
 var jwtKey = builder.Configuration["Jwt:Key"];
+var jwtIssuer = builder.Configuration["Jwt:Issuer"];
+var jwtAudience = builder.Configuration["Jwt:Audience"];
 
+// Test-only fallback configuration
+if (builder.Environment.IsEnvironment("Testing"))
+{
+    jwtKey ??= "WritePad_Test_Secret_Key_12345678901234567890";
+    jwtIssuer ??= "WritePadTest";
+    jwtAudience ??= "WritePadTestUsers";
+}
+
+// Never allow missing JWT configuration in Development or Production
 if (string.IsNullOrWhiteSpace(jwtKey))
 {
     throw new InvalidOperationException(
         "JWT Key is missing from configuration."
+    );
+}
+
+if (string.IsNullOrWhiteSpace(jwtIssuer) ||
+    string.IsNullOrWhiteSpace(jwtAudience))
+{
+    throw new InvalidOperationException(
+        "JWT Issuer or Audience is missing from configuration."
     );
 }
 
@@ -120,8 +149,8 @@ builder.Services
                 ValidateLifetime = true,
                 ValidateIssuerSigningKey = true,
 
-                ValidIssuer = builder.Configuration["Jwt:Issuer"],
-                ValidAudience = builder.Configuration["Jwt:Audience"],
+                ValidIssuer = jwtIssuer,
+                ValidAudience = jwtAudience,
 
                 IssuerSigningKey = new SymmetricSecurityKey(
                     Encoding.UTF8.GetBytes(jwtKey)
@@ -145,15 +174,33 @@ builder.Services
         };
     });
 
+
+
+
 // ===============================
 // DATABASE
 // ===============================
-builder.Services.AddDbContext<TokenDbContext>(options =>
+
+// ===============================
+// DATABASE
+// ===============================
+var connectionString =
+    builder.Configuration.GetConnectionString("DefaultConnection");
+
+if (!builder.Environment.IsEnvironment("Testing"))
 {
-    options.UseSqlServer(
-        builder.Configuration.GetConnectionString("DefaultConnection")
-    );
-});
+    if (string.IsNullOrWhiteSpace(connectionString))
+    {
+        throw new InvalidOperationException(
+            "Database connection string is missing from configuration."
+        );
+    }
+
+    builder.Services.AddDbContext<TokenDbContext>(options =>
+    {
+        options.UseSqlServer(connectionString);
+    });
+}
 
 // ===============================
 // AUTHORIZATION
@@ -219,7 +266,7 @@ app.UseHttpsRedirection();
 app.UseCors("ReactPolicy");
 
 // ===============================
-// RATE LIMITING MIDDLEWARE
+// RATE LIMITING
 // ===============================
 app.UseRateLimiter();
 
