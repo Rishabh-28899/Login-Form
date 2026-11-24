@@ -1,4 +1,5 @@
-﻿using System.IdentityModel.Tokens.Jwt;
+﻿
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
@@ -7,7 +8,6 @@ using WritePad.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 using Token2Core.Data;
-
 
 namespace Token2Core.Controllers;
 
@@ -35,7 +35,6 @@ public class AuthController : ControllerBase
     [HttpPost("login")]
     public IActionResult Login([FromBody] LoginRequest request)
     {
-        // Find user in database
         var user = _context.Users
             .FirstOrDefault(x => x.Username == request.Username);
 
@@ -44,7 +43,6 @@ public class AuthController : ControllerBase
             return Unauthorized("Username or password is incorrect");
         }
 
-        // Verify password against stored hash
         var passwordValid = _passwordService.VerifyPassword(
             user.PasswordHash,
             request.Password);
@@ -54,22 +52,17 @@ public class AuthController : ControllerBase
             return Unauthorized("Username or password is incorrect");
         }
 
-        // Create claims
         var claims = new List<Claim>
-{
-    new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-    new Claim(ClaimTypes.Name, user.Username),
-    new Claim(ClaimTypes.Email, user.Email),
-    new Claim(ClaimTypes.Role, user.Role)
-};
+        {
+            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+            new Claim(ClaimTypes.Name, user.Username),
+            new Claim(ClaimTypes.Email, user.Email),
+            new Claim(ClaimTypes.Role, user.Role)
+        };
 
-        // Generate Access Token
         var accessToken = GenerateAccessToken(claims);
-
-        // Generate Refresh Token
         var refreshToken = GenerateRefreshToken();
 
-        // Save Refresh Token to database
         var refreshTokenEntity = new RefreshTokem
         {
             Username = user.Username,
@@ -88,7 +81,6 @@ public class AuthController : ControllerBase
         });
     }
 
-
     // ==========================================
     // REFRESH TOKEN
     // ==========================================
@@ -101,7 +93,6 @@ public class AuthController : ControllerBase
             return BadRequest("Refresh token is required");
         }
 
-        // Find token in database
         var storedToken = _context.RefreshTokems
             .FirstOrDefault(x => x.Token == request.RefreshToken);
 
@@ -120,7 +111,6 @@ public class AuthController : ControllerBase
             return Unauthorized("Refresh token has expired");
         }
 
-        // Find user
         var user = _context.Users
             .FirstOrDefault(x => x.Username == storedToken.Username);
 
@@ -129,25 +119,19 @@ public class AuthController : ControllerBase
             return Unauthorized("User not found");
         }
 
-        // Create claims
         var claims = new List<Claim>
-{
-    new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-    new Claim(ClaimTypes.Name, user.Username),
-    new Claim(ClaimTypes.Email, user.Email),
-    new Claim(ClaimTypes.Role, user.Role)
-};
+        {
+            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+            new Claim(ClaimTypes.Name, user.Username),
+            new Claim(ClaimTypes.Email, user.Email),
+            new Claim(ClaimTypes.Role, user.Role)
+        };
 
-        // Generate new Access Token
         var newAccessToken = GenerateAccessToken(claims);
-
-        // Generate new Refresh Token
         var newRefreshToken = GenerateRefreshToken();
 
-        // Revoke old refresh token
         storedToken.IsRevoked = true;
 
-        // Save new refresh token
         var newRefreshTokenEntity = new RefreshTokem
         {
             Username = user.Username,
@@ -166,6 +150,37 @@ public class AuthController : ControllerBase
         });
     }
 
+    // ==========================================
+    // LOGOUT
+    // ==========================================
+    [HttpPost("logout")]
+    public IActionResult Logout(
+        [FromBody] RefreshTokenRequest request)
+    {
+        if (string.IsNullOrEmpty(request.RefreshToken))
+        {
+            return BadRequest("Refresh token is required");
+        }
+
+        var storedToken = _context.RefreshTokems
+            .FirstOrDefault(x => x.Token == request.RefreshToken);
+
+        if (storedToken == null)
+        {
+            return Unauthorized("Invalid refresh token");
+        }
+
+        if (!storedToken.IsRevoked)
+        {
+            storedToken.IsRevoked = true;
+            _context.SaveChanges();
+        }
+
+        return Ok(new
+        {
+            message = "Logged out successfully"
+        });
+    }
 
     // ==========================================
     // GENERATE ACCESS TOKEN
@@ -190,7 +205,6 @@ public class AuthController : ControllerBase
         return new JwtSecurityTokenHandler()
             .WriteToken(token);
     }
-
 
     // ==========================================
     // GENERATE REFRESH TOKEN
