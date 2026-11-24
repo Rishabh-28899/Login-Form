@@ -88,6 +88,54 @@ public class ApiTestAdminAuthorization
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
+    [Fact]
+    public async Task Admin_Can_Access_Admin_Dashboard()
+    {
+        var token = GenerateJwtToken("Admin");
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            "/api/Admin/dashboard");
+
+        request.Headers.Authorization =
+            new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await _client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+    [Fact]
+    public async Task Regular_User_Cannot_Access_Admin_Dashboard()
+    {
+        var token = GenerateJwtToken("User");
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            "/api/Admin/dashboard");
+
+        request.Headers.Authorization =
+            new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await _client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+    [Fact]
+    public async Task Admin_Can_Access_All_Notes_Endpoint()
+    {
+        var token = GenerateJwtToken("Admin");
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            "/api/Admin/notes");
+
+        request.Headers.Authorization =
+            new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await _client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
 }
 
 
