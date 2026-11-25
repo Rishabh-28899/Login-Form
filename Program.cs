@@ -101,6 +101,11 @@ builder.Services.AddScoped<PasswordService>();
 builder.Services.AddScoped<INotesRepository, NotesRepository>();
 
 // ===============================
+// UNIT OF WORK
+// ===============================
+builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
+
+// ===============================
 // NOTES SERVICE LAYER
 // ===============================
 builder.Services.AddScoped<INotesService, NotesService>();
@@ -328,6 +333,3 @@ finally
 public partial class Program
 {
 }
-
-
-

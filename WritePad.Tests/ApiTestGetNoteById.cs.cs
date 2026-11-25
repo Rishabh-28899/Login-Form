@@ -32,7 +32,6 @@ public class ApiTestGetNoteById
         _validationParameters = jwtOptions.TokenValidationParameters;
     }
 
-    // Generate JWT Token for a specific user
     private string GenerateJwtToken(string userId)
     {
         var key = _validationParameters.IssuerSigningKey
@@ -60,7 +59,6 @@ public class ApiTestGetNoteById
     }
 
     // Test: Get note by ID with valid token
-    // Expected: 200 OK
     [Fact]
     public async Task Get_Note_By_Id_With_Valid_Token_Should_Return_Ok()
     {
@@ -80,16 +78,18 @@ public class ApiTestGetNoteById
                 Topic = "Testing"
             });
 
-        Assert.Equal(HttpStatusCode.OK, createResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
 
-        var createdNote = await createResponse.Content
-            .ReadFromJsonAsync<CreateNoteResponse>();
+        var createdResponse =
+            await createResponse.Content
+                .ReadFromJsonAsync<ApiResponse<CreateNoteResponse>>();
 
-        Assert.NotNull(createdNote);
+        Assert.NotNull(createdResponse);
+        Assert.NotNull(createdResponse.Data);
 
-        // Act: Get the created note
+        // Act
         var response = await _client.GetAsync(
-            $"/api/Notes/{createdNote.noteId}");
+            $"/api/Notes/{createdResponse.Data.NoteId}");
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -98,7 +98,7 @@ public class ApiTestGetNoteById
     [Fact]
     public async Task User_Cannot_Access_Another_Users_Note()
     {
-        // Arrange: User 1002 creates a note
+        // User 1002 creates a note
         var user1Token = GenerateJwtToken("1002");
 
         _client.DefaultRequestHeaders.Authorization =
@@ -113,29 +113,31 @@ public class ApiTestGetNoteById
                 Topic = "Security"
             });
 
-        Assert.Equal(HttpStatusCode.OK, createResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
 
-        var createdNote = await createResponse.Content
-            .ReadFromJsonAsync<CreateNoteResponse>();
+        var createdResponse =
+            await createResponse.Content
+                .ReadFromJsonAsync<ApiResponse<CreateNoteResponse>>();
 
-        Assert.NotNull(createdNote);
+        Assert.NotNull(createdResponse);
+        Assert.NotNull(createdResponse.Data);
 
-        // Act: User 2002 tries to access User 1002's note
+        // User 2002 tries to access User 1002's note
         var user2Token = GenerateJwtToken("2002");
 
         _client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", user2Token);
 
         var response = await _client.GetAsync(
-            $"/api/Notes/{createdNote.noteId}");
+            $"/api/Notes/{createdResponse.Data.NoteId}");
 
-        // Assert: Access should be denied
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
+
     [Fact]
     public async Task User_Cannot_Update_Another_Users_Note()
     {
-        // Arrange: User 1002 creates a note
+        // User 1002 creates a note
         var user1Token = GenerateJwtToken("1002");
 
         _client.DefaultRequestHeaders.Authorization =
@@ -150,21 +152,23 @@ public class ApiTestGetNoteById
                 Topic = "Security"
             });
 
-        Assert.Equal(HttpStatusCode.OK, createResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
 
-        var createdNote = await createResponse.Content
-            .ReadFromJsonAsync<CreateNoteResponse>();
+        var createdResponse =
+            await createResponse.Content
+                .ReadFromJsonAsync<ApiResponse<CreateNoteResponse>>();
 
-        Assert.NotNull(createdNote);
+        Assert.NotNull(createdResponse);
+        Assert.NotNull(createdResponse.Data);
 
-        // Act: User 2002 tries to update User 1002's note
+        // User 2002 tries to update User 1002's note
         var user2Token = GenerateJwtToken("2002");
 
         _client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", user2Token);
 
         var updateResponse = await _client.PutAsJsonAsync(
-            $"/api/Notes/{createdNote.noteId}",
+            $"/api/Notes/{createdResponse.Data.NoteId}",
             new
             {
                 Title = "Hacked Note",
@@ -172,13 +176,13 @@ public class ApiTestGetNoteById
                 Topic = "Unauthorized"
             });
 
-        // Assert: User 2002 should not be allowed to update it
         Assert.Equal(HttpStatusCode.NotFound, updateResponse.StatusCode);
     }
+
     [Fact]
     public async Task User_Cannot_Delete_Another_Users_Note()
     {
-        // Arrange: User 1002 creates a note
+        // User 1002 creates a note
         var user1Token = GenerateJwtToken("1002");
 
         _client.DefaultRequestHeaders.Authorization =
@@ -193,29 +197,41 @@ public class ApiTestGetNoteById
                 Topic = "Security"
             });
 
-        Assert.Equal(HttpStatusCode.OK, createResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
 
-        var createdNote = await createResponse.Content
-            .ReadFromJsonAsync<CreateNoteResponse>();
+        var createdResponse =
+            await createResponse.Content
+                .ReadFromJsonAsync<ApiResponse<CreateNoteResponse>>();
 
-        Assert.NotNull(createdNote);
+        Assert.NotNull(createdResponse);
+        Assert.NotNull(createdResponse.Data);
 
-        // Act: User 2002 tries to delete User 1002's note
+        // User 2002 tries to delete User 1002's note
         var user2Token = GenerateJwtToken("2002");
 
         _client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", user2Token);
 
         var deleteResponse = await _client.DeleteAsync(
-            $"/api/Notes/{createdNote.noteId}");
+            $"/api/Notes/{createdResponse.Data.NoteId}");
 
-        // Assert: User 2002 should not be allowed to delete it
         Assert.Equal(HttpStatusCode.NotFound, deleteResponse.StatusCode);
     }
-    // Response model
+
+    // Standardized API response envelope
+    private class ApiResponse<T>
+    {
+        public bool Success { get; set; }
+        public string Message { get; set; } = string.Empty;
+        public T? Data { get; set; }
+        public List<string> Errors { get; set; } = new();
+    }
+
     private class CreateNoteResponse
     {
-        public int noteId { get; set; }
+        public int NoteId { get; set; }
+        public int UserId { get; set; }
+        public string Title { get; set; } = string.Empty;
+        public string Topic { get; set; } = string.Empty;
     }
 }
-

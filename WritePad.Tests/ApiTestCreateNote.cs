@@ -4,7 +4,6 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using System.Text.Json;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -28,7 +27,6 @@ public class ApiTestCreateNote
     public ApiTestCreateNote(CustomWebApplicationFactory factory)
     {
         _factory = factory;
-
         _client = factory.CreateClient();
 
         var jwtOptions = factory.Services
@@ -38,7 +36,6 @@ public class ApiTestCreateNote
         _validationParameters = jwtOptions.TokenValidationParameters;
     }
 
-    // Generate JWT Token for Testing
     private string GenerateJwtToken()
     {
         var key = _validationParameters.IssuerSigningKey
@@ -65,7 +62,6 @@ public class ApiTestCreateNote
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
-    // Test: Create Note with Valid JWT
     [Fact]
     public async Task Post_Notes_With_Valid_Token_Should_Save_Note_For_Authenticated_User()
     {
@@ -91,18 +87,19 @@ public class ApiTestCreateNote
         // Act
         var response = await _client.SendAsync(request);
 
-        // Assert 1: API should return 200 OK
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        // Assert 1: Resource creation should return 201 Created
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
-        // Read response body
-        var responseBody = await response.Content.ReadAsStringAsync();
+        // Read standardized API response
+        var responseBody =
+            await response.Content.ReadFromJsonAsync<ApiResponse<CreateNoteResponse>>();
 
-        using var jsonDocument = JsonDocument.Parse(responseBody);
+        Assert.NotNull(responseBody);
+        Assert.True(responseBody.Success);
+        Assert.NotNull(responseBody.Data);
 
-        var root = jsonDocument.RootElement;
-
-        int noteId = root.GetProperty("noteId").GetInt32();
-        int userId = root.GetProperty("userId").GetInt32();
+        int noteId = responseBody.Data.NoteId;
+        int userId = responseBody.Data.UserId;
 
         // Assert 2: API response should contain authenticated UserId
         Assert.Equal(1002, userId);
@@ -126,4 +123,20 @@ public class ApiTestCreateNote
         Assert.Equal(note.Title, savedNote.Title);
         Assert.Equal(note.Content, savedNote.Content);
     }
-} 
+
+    private class ApiResponse<T>
+    {
+        public bool Success { get; set; }
+        public string Message { get; set; } = string.Empty;
+        public T? Data { get; set; }
+        public List<string> Errors { get; set; } = new();
+    }
+
+    private class CreateNoteResponse
+    {
+        public int NoteId { get; set; }
+        public int UserId { get; set; }
+        public string Title { get; set; } = string.Empty;
+        public string Topic { get; set; } = string.Empty;
+    }
+}

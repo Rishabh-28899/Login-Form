@@ -6,14 +6,14 @@ namespace WritePad.Services
 {
     public class NotesService : INotesService
     {
-        private readonly INotesRepository _repository;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<NotesService> _logger;
 
         public NotesService(
-            INotesRepository repository,
+            IUnitOfWork unitOfWork,
             ILogger<NotesService> logger)
         {
-            _repository = repository;
+            _unitOfWork = unitOfWork;
             _logger = logger;
         }
 
@@ -31,7 +31,9 @@ namespace WritePad.Services
                 UserId = userId
             };
 
-            await _repository.CreateAsync(note);
+            await _unitOfWork.Notes.CreateAsync(note);
+
+            await _unitOfWork.SaveChangesAsync();
 
             _logger.LogInformation(
                 "Note created. NoteId: {NoteId}, UserId: {UserId}",
@@ -44,7 +46,7 @@ namespace WritePad.Services
         // GET USER NOTES
         public async Task<List<Note>> GetMyNotesAsync(int userId)
         {
-            var notes = await _repository.GetByUserIdAsync(userId);
+            var notes = await _unitOfWork.Notes.GetByUserIdAsync(userId);
 
             _logger.LogInformation(
                 "Retrieved {Count} notes for UserId: {UserId}",
@@ -55,13 +57,10 @@ namespace WritePad.Services
         }
 
         // GET SINGLE NOTE
-        public async Task<Note?> GetNoteAsync(
-            int id,
-            int userId)
+        public async Task<Note?> GetNoteAsync(int id, int userId)
         {
-            var note = await _repository.GetByIdAndUserIdAsync(
-                id,
-                userId);
+            var note = await _unitOfWork.Notes
+                .GetByIdAndUserIdAsync(id, userId);
 
             if (note == null)
             {
@@ -80,9 +79,8 @@ namespace WritePad.Services
             UpdateNoteRequest request,
             int userId)
         {
-            var note = await _repository.GetByIdAndUserIdAsync(
-                id,
-                userId);
+            var note = await _unitOfWork.Notes
+                .GetByIdAndUserIdAsync(id, userId);
 
             if (note == null)
             {
@@ -99,7 +97,9 @@ namespace WritePad.Services
             note.Topic = request.Topic;
             note.UpdatedAt = DateTime.UtcNow;
 
-            await _repository.UpdateAsync(note);
+            await _unitOfWork.Notes.UpdateAsync(note);
+
+            await _unitOfWork.SaveChangesAsync();
 
             _logger.LogInformation(
                 "Note updated. NoteId: {NoteId}, UserId: {UserId}",
@@ -110,13 +110,10 @@ namespace WritePad.Services
         }
 
         // DELETE NOTE
-        public async Task<bool> DeleteNoteAsync(
-            int id,
-            int userId)
+        public async Task<bool> DeleteNoteAsync(int id, int userId)
         {
-            var note = await _repository.GetByIdAndUserIdAsync(
-                id,
-                userId);
+            var note = await _unitOfWork.Notes
+                .GetByIdAndUserIdAsync(id, userId);
 
             if (note == null)
             {
@@ -128,7 +125,9 @@ namespace WritePad.Services
                 return false;
             }
 
-            await _repository.DeleteAsync(note);
+            await _unitOfWork.Notes.DeleteAsync(note);
+
+            await _unitOfWork.SaveChangesAsync();
 
             _logger.LogInformation(
                 "Note deleted. NoteId: {NoteId}, UserId: {UserId}",

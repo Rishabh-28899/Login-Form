@@ -8,6 +8,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Token2Core.Data;
+using WritePad.Services;
 
 namespace WritePad.Tests.Infrastructure;
 
@@ -36,15 +37,26 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
 
         builder.ConfigureServices(services =>
         {
+            // Remove existing database registrations
             services.RemoveAll<DbContextOptions<TokenDbContext>>();
             services.RemoveAll<DbContextOptions>();
             services.RemoveAll<IDbContextOptionsConfiguration<TokenDbContext>>();
             services.RemoveAll<TokenDbContext>();
 
+            // Register InMemory database
             services.AddDbContext<TokenDbContext>(options =>
             {
                 options.UseInMemoryDatabase(_databaseName, _databaseRoot);
             });
+
+            // Register Repository Pattern
+            services.AddScoped<INotesRepository, NotesRepository>();
+
+            // Register Unit of Work
+            services.AddScoped<IUnitOfWork, UnitOfWork>();
+
+            // Register Notes Service
+            services.AddScoped<INotesService, NotesService>();
         });
     }
 }

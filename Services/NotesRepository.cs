@@ -17,7 +17,6 @@ namespace WritePad.Services
         public async Task<Note> CreateAsync(Note note)
         {
             await _context.Notes.AddAsync(note);
-            await _context.SaveChangesAsync();
 
             return note;
         }
@@ -36,16 +35,19 @@ namespace WritePad.Services
                 .FirstOrDefaultAsync(n => n.Id == id && n.UserId == userId);
         }
 
-        public async Task UpdateAsync(Note note)
+        public Task UpdateAsync(Note note)
         {
             _context.Notes.Update(note);
-            await _context.SaveChangesAsync();
+
+            return Task.CompletedTask;
         }
 
-        public async Task DeleteAsync(Note note)
+        public Task DeleteAsync(Note note)
         {
             _context.Notes.Remove(note);
-            await _context.SaveChangesAsync();
+
+            return Task.CompletedTask;
         }
     }
 }
+

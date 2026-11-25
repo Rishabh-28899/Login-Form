@@ -10,6 +10,7 @@ namespace WritePad.Tests;
 
 public class NotesServiceTests
 {
+    // CREATE IN-MEMORY DATABASE
     private static TokenDbContext CreateContext()
     {
         var options = new DbContextOptionsBuilder<TokenDbContext>()
@@ -19,57 +20,62 @@ public class NotesServiceTests
         return new TokenDbContext(options);
     }
 
-    // CREATE SERVICE USING REPOSITORY
+    // CREATE SERVICE USING UNIT OF WORK
     private static NotesService CreateService(TokenDbContext context)
     {
         var repository = new NotesRepository(context);
 
+        var unitOfWork = new UnitOfWork(
+            context,
+            repository);
+
         return new NotesService(
-            repository,
+            unitOfWork,
             NullLogger<NotesService>.Instance);
     }
 
-    // 1. CREATE NOTE
+    // TEST 1: CREATE NOTE
     [Fact]
-    public async Task CreateNote_Should_Save_Note_With_UserId()
+    public async Task CreateNoteAsync_ShouldCreateNote()
     {
-        await using var context = CreateContext();
+        using var context = CreateContext();
         var service = CreateService(context);
 
         var request = new CreateNoteRequest
         {
-            Title = "Test Note",
+            Title = "Test Title",
             Content = "Test Content",
             Topic = "Testing"
         };
 
-        var result = await service.CreateNoteAsync(request, 1001);
+        var result = await service.CreateNoteAsync(request, 1);
 
-        Assert.NotEqual(0, result.Id);
-        Assert.Equal("Test Note", result.Title);
-        Assert.Equal(1001, result.UserId);
+        Assert.NotNull(result);
+        Assert.Equal("Test Title", result.Title);
+        Assert.Equal("Test Content", result.Content);
+        Assert.Equal(1, result.UserId);
         Assert.Single(context.Notes);
     }
 
-    // 2. GET MY NOTES
+    // TEST 2: GET NOTES BY USER
     [Fact]
-    public async Task GetMyNotes_Should_Return_Only_Current_User_Notes()
+    public async Task GetMyNotesAsync_ShouldReturnOnlyCurrentUserNotes()
     {
-        await using var context = CreateContext();
+        using var context = CreateContext();
 
         context.Notes.AddRange(
             new Note
             {
                 Title = "User 1 Note",
                 Content = "Content 1",
-                UserId = 1001,
+                UserId = 1,
                 CreatedAt = DateTime.UtcNow
             },
             new Note
             {
                 Title = "User 2 Note",
                 Content = "Content 2",
-                UserId = 1002,
+                UserId = 2,
                 CreatedAt = DateTime.UtcNow
             });
 
@@ -77,23 +83,24 @@ public class NotesServiceTests
 
         var service = CreateService(context);
 
-        var result = await service.GetMyNotesAsync(1001);
+        var result = await service.GetMyNotesAsync(1);
 
         Assert.Single(result);
-        Assert.All(result, note => Assert.Equal(1001, note.UserId));
+        Assert.Equal("User 1 Note", result[0].Title);
+        Assert.Equal(1, result[0].UserId);
     }
 
-    // 3. GET NOTE BY ID
+    // TEST 3: GET NOTE BY ID AND USER
     [Fact]
-    public async Task GetNote_Should_Return_Note_When_User_Owns_It()
+    public async Task GetNoteAsync_ShouldReturnNoteForCorrectUser()
     {
-        await using var context = CreateContext();
+        using var context = CreateContext();
 
         var note = new Note
         {
             Title = "My Note",
             Content = "My Content",
-            UserId = 1001,
+            UserId = 1,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -102,23 +109,23 @@ public class NotesServiceTests
 
         var service = CreateService(context);
 
-        var result = await service.GetNoteAsync(note.Id, 1001);
+        var result = await service.GetNoteAsync(note.Id, 1);
 
         Assert.NotNull(result);
-        Assert.Equal(note.Id, result.Id);
+        Assert.Equal("My Note", result.Title);
     }
 
-    // 4. GET NOTE - USER OWNERSHIP
+    // TEST 4: GET NOTE FOR WRONG USER
     [Fact]
-    public async Task GetNote_Should_Return_Null_When_Note_Belongs_To_Another_User()
+    public async Task GetNoteAsync_ShouldReturnNullForWrongUser()
     {
-        await using var context = CreateContext();
+        using var context = CreateContext();
 
         var note = new Note
         {
-            Title = "Private Note",
-            Content = "Private Content",
-            UserId = 1001,
+            Title = "My Note",
+            Content = "My Content",
+            UserId = 1,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -127,22 +134,23 @@ public class NotesServiceTests
 
         var service = CreateService(context);
 
-        var result = await service.GetNoteAsync(note.Id, 1002);
+        var result = await service.GetNoteAsync(note.Id, 2);
 
         Assert.Null(result);
     }
 
-    // 5. UPDATE NOTE
+    // TEST 5: UPDATE NOTE
     [Fact]
-    public async Task UpdateNote_Should_Update_Note_When_User_Owns_It()
+    public async Task UpdateNoteAsync_ShouldUpdateNote()
     {
-        await using var context = CreateContext();
+        using var context = CreateContext();
 
         var note = new Note
         {
             Title = "Old Title",
             Content = "Old Content",
-            UserId = 1001,
+            Topic = "Old Topic",
+            UserId = 1,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -155,28 +163,32 @@ public class NotesServiceTests
         {
             Title = "New Title",
             Content = "New Content",
-            Topic = "Updated"
+            Topic = "New Topic"
         };
 
-        var result = await service.UpdateNoteAsync(
-            note.Id, request, 1001);
+        var result = await service.UpdateNoteAsync(note.Id, request, 1);
 
         Assert.True(result);
-        Assert.Equal("New Title", note.Title);
-        Assert.Equal("New Content", note.Content);
+
+        var updatedNote = await context.Notes.FindAsync(note.Id);
+
+        Assert.NotNull(updatedNote);
+        Assert.Equal("New Title", updatedNote.Title);
+        Assert.Equal("New Content", updatedNote.Content);
+        Assert.Equal("New Topic", updatedNote.Topic);
     }
 
-    // 6. UPDATE NOTE - USER OWNERSHIP
+    // TEST 6: UPDATE NOTE FOR WRONG USER
     [Fact]
-    public async Task UpdateNote_Should_Return_False_When_Note_Belongs_To_Another_User()
+    public async Task UpdateNoteAsync_ShouldReturnFalseForWrongUser()
     {
-        await using var context = CreateContext();
+        using var context = CreateContext();
 
         var note = new Note
         {
-            Title = "Original Title",
-            Content = "Original Content",
-            UserId = 1001,
+            Title = "Old Title",
+            Content = "Old Content",
+            UserId = 1,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -187,28 +199,32 @@ public class NotesServiceTests
 
         var request = new UpdateNoteRequest
         {
-            Title = "Hacked Title",
-            Content = "Hacked Content"
+            Title = "New Title",
+            Content = "New Content",
+            Topic = "New Topic"
         };
 
-        var result = await service.UpdateNoteAsync(
-            note.Id, request, 1002);
+        var result = await service.UpdateNoteAsync(note.Id, request, 2);
 
         Assert.False(result);
-        Assert.Equal("Original Title", note.Title);
+
+        var unchangedNote = await context.Notes.FindAsync(note.Id);
+
+        Assert.NotNull(unchangedNote);
+        Assert.Equal("Old Title", unchangedNote.Title);
     }
 
-    // 7. DELETE NOTE
+    // TEST 7: DELETE NOTE
     [Fact]
-    public async Task DeleteNote_Should_Delete_Note_When_User_Owns_It()
+    public async Task DeleteNoteAsync_ShouldDeleteNote()
     {
-        await using var context = CreateContext();
+        using var context = CreateContext();
 
         var note = new Note
         {
             Title = "Delete Me",
-            Content = "Test Content",
-            UserId = 1001,
+            Content = "Content",
+            UserId = 1,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -217,23 +233,23 @@ public class NotesServiceTests
 
         var service = CreateService(context);
 
-        var result = await service.DeleteNoteAsync(note.Id, 1001);
+        var result = await service.DeleteNoteAsync(note.Id, 1);
 
         Assert.True(result);
         Assert.Empty(context.Notes);
     }
 
-    // 8. DELETE NOTE - USER OWNERSHIP
+    // TEST 8: DELETE NOTE FOR WRONG USER
     [Fact]
-    public async Task DeleteNote_Should_Return_False_When_Note_Belongs_To_Another_User()
+    public async Task DeleteNoteAsync_ShouldReturnFalseForWrongUser()
     {
-        await using var context = CreateContext();
+        using var context = CreateContext();
 
         var note = new Note
         {
-            Title = "Protected Note",
-            Content = "Protected Content",
-            UserId = 1001,
+            Title = "Do Not Delete",
+            Content = "Content",
+            UserId = 1,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -242,10 +258,9 @@ public class NotesServiceTests
 
         var service = CreateService(context);
 
-        var result = await service.DeleteNoteAsync(note.Id, 1002);
+        var result = await service.DeleteNoteAsync(note.Id, 2);
 
         Assert.False(result);
         Assert.Single(context.Notes);
     }
 }
-

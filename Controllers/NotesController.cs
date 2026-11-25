@@ -7,6 +7,7 @@ using Token2Core.Validators;
 using Writepad.Model;
 using WritePad.Model;
 using WritePad.Services;
+using WritePad.DTOs;
 
 namespace Token2Core.Controllers
 {
@@ -58,7 +59,11 @@ namespace Token2Core.Controllers
             [FromBody] CreateNoteRequest request)
         {
             if (!TryGetUserId(out int userId))
-                return Unauthorized("Invalid or missing user ID in token.");
+            {
+                return Unauthorized(
+                    ApiResponse<object>.FailureResponse(
+                        "Invalid or missing user ID in token."));
+            }
 
             var validationResult =
                 await _createValidator.ValidateAsync(request);
@@ -69,28 +74,37 @@ namespace Token2Core.Controllers
                     "Create note validation failed. UserId: {UserId}",
                     userId);
 
-                return BadRequest(new
-                {
-                    message = "Validation failed.",
-                    errors = validationResult.Errors.Select(error => new
-                    {
-                        field = error.PropertyName,
-                        error = error.ErrorMessage
-                    })
-                });
+                var errors = validationResult.Errors
+                    .Select(error =>
+                        $"{error.PropertyName}: {error.ErrorMessage}")
+                    .ToList();
+
+                return BadRequest(
+                    ApiResponse<object>.FailureResponse(
+                        "Validation failed.",
+                        errors));
             }
 
             var note = await _notesService.CreateNoteAsync(
                 request, userId);
 
-            return Ok(new
+            var responseData = new
             {
-                message = "Note created successfully",
                 noteId = note.Id,
                 userId = note.UserId,
                 title = note.Title,
                 topic = note.Topic
-            });
+            };
+
+            var response =
+                ApiResponse<object>.SuccessResponse(
+                    responseData,
+                    "Note created successfully.");
+
+            return CreatedAtAction(
+                nameof(GetNote),
+                new { id = note.Id },
+                response);
         }
 
         // GET MY NOTES
@@ -98,11 +112,18 @@ namespace Token2Core.Controllers
         public async Task<IActionResult> GetMyNotes()
         {
             if (!TryGetUserId(out int userId))
-                return Unauthorized("Invalid or missing user ID in token.");
+            {
+                return Unauthorized(
+                    ApiResponse<object>.FailureResponse(
+                        "Invalid or missing user ID in token."));
+            }
 
             var notes = await _notesService.GetMyNotesAsync(userId);
 
-            return Ok(notes);
+            return Ok(
+                ApiResponse<object>.SuccessResponse(
+                    notes,
+                    "Notes retrieved successfully."));
         }
 
         // GET ALL NOTES BELONGING TO CURRENT USER
@@ -110,11 +131,18 @@ namespace Token2Core.Controllers
         public async Task<IActionResult> GetAllNotes()
         {
             if (!TryGetUserId(out int userId))
-                return Unauthorized("Invalid or missing user ID in token.");
+            {
+                return Unauthorized(
+                    ApiResponse<object>.FailureResponse(
+                        "Invalid or missing user ID in token."));
+            }
 
             var notes = await _notesService.GetMyNotesAsync(userId);
 
-            return Ok(notes);
+            return Ok(
+                ApiResponse<object>.SuccessResponse(
+                    notes,
+                    "All notes retrieved successfully."));
         }
 
         // GET SINGLE NOTE
@@ -122,14 +150,25 @@ namespace Token2Core.Controllers
         public async Task<IActionResult> GetNote(int id)
         {
             if (!TryGetUserId(out int userId))
-                return Unauthorized("Invalid or missing user ID in token.");
+            {
+                return Unauthorized(
+                    ApiResponse<object>.FailureResponse(
+                        "Invalid or missing user ID in token."));
+            }
 
             var note = await _notesService.GetNoteAsync(id, userId);
 
             if (note == null)
-                return NotFound("Note not found.");
+            {
+                return NotFound(
+                    ApiResponse<object>.FailureResponse(
+                        "Note not found."));
+            }
 
-            return Ok(note);
+            return Ok(
+                ApiResponse<object>.SuccessResponse(
+                    note,
+                    "Note retrieved successfully."));
         }
 
         // UPDATE NOTE
@@ -139,7 +178,11 @@ namespace Token2Core.Controllers
             [FromBody] UpdateNoteRequest request)
         {
             if (!TryGetUserId(out int userId))
-                return Unauthorized("Invalid or missing user ID in token.");
+            {
+                return Unauthorized(
+                    ApiResponse<object>.FailureResponse(
+                        "Invalid or missing user ID in token."));
+            }
 
             var validationResult =
                 await _updateValidator.ValidateAsync(request);
@@ -150,28 +193,36 @@ namespace Token2Core.Controllers
                     "Update note validation failed. NoteId: {NoteId}, UserId: {UserId}",
                     id, userId);
 
-                return BadRequest(new
-                {
-                    message = "Validation failed.",
-                    errors = validationResult.Errors.Select(error => new
-                    {
-                        field = error.PropertyName,
-                        error = error.ErrorMessage
-                    })
-                });
+                var errors = validationResult.Errors
+                    .Select(error =>
+                        $"{error.PropertyName}: {error.ErrorMessage}")
+                    .ToList();
+
+                return BadRequest(
+                    ApiResponse<object>.FailureResponse(
+                        "Validation failed.",
+                        errors));
             }
 
             var updated = await _notesService.UpdateNoteAsync(
                 id, request, userId);
 
             if (!updated)
-                return NotFound("Note not found.");
-
-            return Ok(new
             {
-                message = "Note updated successfully",
+                return NotFound(
+                    ApiResponse<object>.FailureResponse(
+                        "Note not found."));
+            }
+
+            var responseData = new
+            {
                 noteId = id
-            });
+            };
+
+            return Ok(
+                ApiResponse<object>.SuccessResponse(
+                    responseData,
+                    "Note updated successfully."));
         }
 
         // DELETE NOTE
@@ -179,17 +230,24 @@ namespace Token2Core.Controllers
         public async Task<IActionResult> DeleteNote(int id)
         {
             if (!TryGetUserId(out int userId))
-                return Unauthorized("Invalid or missing user ID in token.");
+            {
+                return Unauthorized(
+                    ApiResponse<object>.FailureResponse(
+                        "Invalid or missing user ID in token."));
+            }
 
-            var deleted = await _notesService.DeleteNoteAsync(id, userId);
+            var deleted = await _notesService.DeleteNoteAsync(
+                id, userId);
 
             if (!deleted)
-                return NotFound("Note not found.");
-
-            return Ok(new
             {
-                message = "Note deleted successfully"
-            });
+                return NotFound(
+                    ApiResponse<object>.FailureResponse(
+                        "Note not found."));
+            }
+
+            // 204 = Successfully deleted, no response body
+            return NoContent();
         }
     }
 }
