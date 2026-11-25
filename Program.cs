@@ -53,6 +53,11 @@ Console.WriteLine("================================");
 builder.Services.AddControllers();
 
 // ===============================
+// HEALTH CHECKS
+// ===============================
+builder.Services.AddHealthChecks();
+
+// ===============================
 // RATE LIMITING
 // ===============================
 builder.Services.AddRateLimiter(options =>
@@ -86,9 +91,19 @@ builder.Services.AddRateLimiter(options =>
 builder.Services.AddValidatorsFromAssemblyContaining<CreateNoteRequestValidator>();
 
 // ===============================
-// PASSWORD SERVICE
+// APPLICATION SERVICES
 // ===============================
 builder.Services.AddScoped<PasswordService>();
+
+// ===============================
+// NOTES REPOSITORY LAYER
+// ===============================
+builder.Services.AddScoped<INotesRepository, NotesRepository>();
+
+// ===============================
+// NOTES SERVICE LAYER
+// ===============================
+builder.Services.AddScoped<INotesService, NotesService>();
 
 // ===============================
 // CORS
@@ -105,7 +120,6 @@ builder.Services.AddCors(options =>
     });
 });
 
-
 // ===============================
 // JWT AUTHENTICATION
 // ===============================
@@ -113,7 +127,6 @@ var jwtKey = builder.Configuration["Jwt:Key"];
 var jwtIssuer = builder.Configuration["Jwt:Issuer"];
 var jwtAudience = builder.Configuration["Jwt:Audience"];
 
-// Test-only fallback configuration
 if (builder.Environment.IsEnvironment("Testing"))
 {
     jwtKey ??= "WritePad_Test_Secret_Key_12345678901234567890";
@@ -121,7 +134,6 @@ if (builder.Environment.IsEnvironment("Testing"))
     jwtAudience ??= "WritePadTestUsers";
 }
 
-// Never allow missing JWT configuration in Development or Production
 if (string.IsNullOrWhiteSpace(jwtKey))
 {
     throw new InvalidOperationException(
@@ -173,13 +185,6 @@ builder.Services
             }
         };
     });
-
-
-
-
-// ===============================
-// DATABASE
-// ===============================
 
 // ===============================
 // DATABASE
@@ -291,6 +296,11 @@ app.UseAuthorization();
 app.MapControllers();
 
 // ===============================
+// HEALTH CHECK ENDPOINT
+// ===============================
+app.MapHealthChecks("/health");
+
+// ===============================
 // CREATE ADMIN ACCOUNT
 // ===============================
 if (!app.Environment.IsEnvironment("Testing"))
@@ -318,10 +328,6 @@ finally
 public partial class Program
 {
 }
-
-
-
-
 
 
 
