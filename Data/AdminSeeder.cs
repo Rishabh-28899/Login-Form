@@ -4,22 +4,25 @@ using Microsoft.EntityFrameworkCore;
 using Token2Core.Data;
 using WritePad.Model;
 
-
 namespace WritePad.Data
 {
     public static class AdminSeeder
     {
         public static async Task SeedAdminAsync(
-            IServiceProvider serviceProvider)
+            IServiceProvider serviceProvider,
+            CancellationToken cancellationToken = default)
         {
-            using var scope = serviceProvider.CreateScope();
+            await using var scope =
+                serviceProvider.CreateAsyncScope();
 
             var context = scope.ServiceProvider
                 .GetRequiredService<TokenDbContext>();
 
             // Check whether admin already exists
             var adminExists = await context.Users
-                .AnyAsync(u => u.Username == "admin");
+                .AnyAsync(
+                    u => u.Username == "admin",
+                    cancellationToken);
 
             if (!adminExists)
             {
@@ -34,14 +37,15 @@ namespace WritePad.Data
 
                 admin.PasswordHash = hasher.HashPassword(
                     admin,
-                    "Admin@123"
-                );
+                    "Admin@123");
 
                 context.Users.Add(admin);
 
-                await context.SaveChangesAsync();
+                await context.SaveChangesAsync(
+                    cancellationToken);
             }
         }
     }
 }
+
 

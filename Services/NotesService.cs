@@ -22,7 +22,8 @@ namespace WritePad.Services
         // CREATE NOTE
         public async Task<Note> CreateNoteAsync(
             CreateNoteRequest request,
-            int userId)
+            int userId,
+            CancellationToken cancellationToken = default)
         {
             var note = new Note
             {
@@ -33,9 +34,10 @@ namespace WritePad.Services
                 UserId = userId
             };
 
-            await _unitOfWork.Notes.CreateAsync(note);
+            await _unitOfWork.Notes.CreateAsync(
+                note, cancellationToken);
 
-            await _unitOfWork.SaveChangesAsync();
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation(
                 "Note created. NoteId: {NoteId}, UserId: {UserId}",
@@ -46,10 +48,12 @@ namespace WritePad.Services
         }
 
         // GET ALL NOTES FOR CURRENT USER
-        public async Task<List<Note>> GetMyNotesAsync(int userId)
+        public async Task<List<Note>> GetMyNotesAsync(
+            int userId,
+            CancellationToken cancellationToken = default)
         {
             var notes = await _unitOfWork.Notes
-                .GetByUserIdAsync(userId);
+                .GetByUserIdAsync(userId, cancellationToken);
 
             _logger.LogInformation(
                 "Retrieved {Count} notes for UserId: {UserId}",
@@ -64,13 +68,15 @@ namespace WritePad.Services
             GetMyNotesPagedAsync(
                 int userId,
                 int pageNumber,
-                int pageSize)
+                int pageSize,
+                CancellationToken cancellationToken = default)
         {
             var result = await _unitOfWork.Notes
                 .GetPagedByUserIdAsync(
                     userId,
                     pageNumber,
-                    pageSize);
+                    pageSize,
+                    cancellationToken);
 
             var noteDtos = result.Items.Select(note =>
                 new NoteResponseDto
@@ -103,7 +109,8 @@ namespace WritePad.Services
                 string? searchTerm,
                 string? topic,
                 int pageNumber,
-                int pageSize)
+                int pageSize,
+                CancellationToken cancellationToken = default)
         {
             var result = await _unitOfWork.Notes
                 .SearchPagedByUserIdAsync(
@@ -111,7 +118,8 @@ namespace WritePad.Services
                     searchTerm,
                     topic,
                     pageNumber,
-                    pageSize);
+                    pageSize,
+                    cancellationToken);
 
             var noteDtos = result.Items.Select(note =>
                 new NoteResponseDto
@@ -141,10 +149,12 @@ namespace WritePad.Services
         // GET SINGLE NOTE
         public async Task<Note?> GetNoteAsync(
             int id,
-            int userId)
+            int userId,
+            CancellationToken cancellationToken = default)
         {
             var note = await _unitOfWork.Notes
-                .GetByIdAndUserIdAsync(id, userId);
+                .GetByIdAndUserIdAsync(
+                    id, userId, cancellationToken);
 
             if (note == null)
             {
@@ -161,10 +171,12 @@ namespace WritePad.Services
         public async Task<bool> UpdateNoteAsync(
             int id,
             UpdateNoteRequest request,
-            int userId)
+            int userId,
+            CancellationToken cancellationToken = default)
         {
             var note = await _unitOfWork.Notes
-                .GetByIdAndUserIdAsync(id, userId);
+                .GetByIdAndUserIdAsync(
+                    id, userId, cancellationToken);
 
             if (note == null)
             {
@@ -181,9 +193,10 @@ namespace WritePad.Services
             note.Topic = request.Topic;
             note.UpdatedAt = DateTime.UtcNow;
 
-            await _unitOfWork.Notes.UpdateAsync(note);
+            await _unitOfWork.Notes.UpdateAsync(
+                note, cancellationToken);
 
-            await _unitOfWork.SaveChangesAsync();
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation(
                 "Note updated. NoteId: {NoteId}, UserId: {UserId}",
@@ -196,10 +209,12 @@ namespace WritePad.Services
         // DELETE NOTE
         public async Task<bool> DeleteNoteAsync(
             int id,
-            int userId)
+            int userId,
+            CancellationToken cancellationToken = default)
         {
             var note = await _unitOfWork.Notes
-                .GetByIdAndUserIdAsync(id, userId);
+                .GetByIdAndUserIdAsync(
+                    id, userId, cancellationToken);
 
             if (note == null)
             {
@@ -211,9 +226,10 @@ namespace WritePad.Services
                 return false;
             }
 
-            await _unitOfWork.Notes.DeleteAsync(note);
+            await _unitOfWork.Notes.DeleteAsync(
+                note, cancellationToken);
 
-            await _unitOfWork.SaveChangesAsync();
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation(
                 "Note deleted. NoteId: {NoteId}, UserId: {UserId}",

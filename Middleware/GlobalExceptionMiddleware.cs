@@ -34,7 +34,7 @@ namespace Token2Core.Middleware
                     context.Request.Path,
                     context.TraceIdentifier
                 );
-                Console.WriteLine(ex.ToString());
+
                 // If response has already started, rethrow
                 if (context.Response.HasStarted)
                 {
@@ -64,9 +64,14 @@ namespace Token2Core.Middleware
                     context.TraceIdentifier;
 
                 // Return JSON response
-                await context.Response.WriteAsJsonAsync(problem);
+                await context.Response.WriteAsJsonAsync(
+                    problem,
+                    cancellationToken: context.RequestAborted
+                );
             }
         }
     }
+}
+
 }
 

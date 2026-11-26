@@ -15,19 +15,23 @@ namespace WritePad.Services
             _context = context;
         }
 
-        public async Task<Note> CreateAsync(Note note)
+        public async Task<Note> CreateAsync(
+            Note note,
+            CancellationToken cancellationToken = default)
         {
-            await _context.Notes.AddAsync(note);
+            await _context.Notes.AddAsync(note, cancellationToken);
 
             return note;
         }
 
-        public async Task<List<Note>> GetByUserIdAsync(int userId)
+        public async Task<List<Note>> GetByUserIdAsync(
+            int userId,
+            CancellationToken cancellationToken = default)
         {
             return await _context.Notes
                 .Where(n => n.UserId == userId)
                 .OrderByDescending(n => n.CreatedAt)
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
         }
 
         // PAGINATED NOTES
@@ -35,20 +39,19 @@ namespace WritePad.Services
             GetPagedByUserIdAsync(
                 int userId,
                 int pageNumber,
-                int pageSize)
+                int pageSize,
+                CancellationToken cancellationToken = default)
         {
             var query = _context.Notes
                 .Where(n => n.UserId == userId);
 
-            // Count total notes for this user
-            var totalRecords = await query.CountAsync();
+            var totalRecords = await query.CountAsync(cancellationToken);
 
-            // Fetch only the requested page
             var items = await query
                 .OrderByDescending(n => n.CreatedAt)
                 .Skip((pageNumber - 1) * pageSize)
                 .Take(pageSize)
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
 
             return (items, totalRecords);
         }
@@ -60,54 +63,63 @@ namespace WritePad.Services
                 string? searchTerm,
                 string? topic,
                 int pageNumber,
-                int pageSize)
+                int pageSize,
+                CancellationToken cancellationToken = default)
         {
-            // First restrict notes to the authenticated user
             var query = _context.Notes
                 .Where(n => n.UserId == userId);
 
-            // Search by title
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
                 query = query.Where(n =>
                     n.Title.Contains(searchTerm));
             }
 
-            // Filter by topic
             if (!string.IsNullOrWhiteSpace(topic))
             {
                 query = query.Where(n =>
                     n.Topic == topic);
             }
 
-            // Count after applying filters
-            var totalRecords = await query.CountAsync();
+            var totalRecords = await query.CountAsync(cancellationToken);
 
-            // Sort and paginate
             var items = await query
                 .OrderByDescending(n => n.CreatedAt)
                 .Skip((pageNumber - 1) * pageSize)
                 .Take(pageSize)
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
 
             return (items, totalRecords);
         }
 
-        public async Task<Note?> GetByIdAndUserIdAsync(int id, int userId)
+        public async Task<Note?> GetByIdAndUserIdAsync(
+            int id,
+            int userId,
+            CancellationToken cancellationToken = default)
         {
             return await _context.Notes
-                .FirstOrDefaultAsync(n => n.Id == id && n.UserId == userId);
+                .FirstOrDefaultAsync(
+                    n => n.Id == id && n.UserId == userId,
+                    cancellationToken);
         }
 
-        public Task UpdateAsync(Note note)
+        public Task UpdateAsync(
+            Note note,
+            CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             _context.Notes.Update(note);
 
             return Task.CompletedTask;
         }
 
-        public Task DeleteAsync(Note note)
+        public Task DeleteAsync(
+            Note note,
+            CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             _context.Notes.Remove(note);
 
             return Task.CompletedTask;

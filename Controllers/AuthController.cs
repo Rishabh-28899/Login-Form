@@ -1,6 +1,6 @@
 ﻿
-using Azure.Core;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
@@ -18,7 +18,7 @@ public class AuthController : ControllerBase
 {
     private readonly IConfiguration _configuration;
     private readonly TokenDbContext _context;
-    private readonly PasswordService _passwordService; 
+    private readonly PasswordService _passwordService;
 
     public AuthController(
         IConfiguration configuration,
@@ -34,10 +34,14 @@ public class AuthController : ControllerBase
     // LOGIN
     // ==========================================
     [HttpPost("login")]
-    public IActionResult Login([FromBody] LoginRequest request)
+    public async Task<IActionResult> Login(
+        [FromBody] LoginRequest request,
+        CancellationToken cancellationToken)
     {
-        var user = _context.Users
-            .FirstOrDefault(x => x.Username == request.Username);
+        var user = await _context.Users
+            .FirstOrDefaultAsync(
+                x => x.Username == request.Username,
+                cancellationToken);
 
         if (user == null)
         {
@@ -72,8 +76,11 @@ public class AuthController : ControllerBase
             IsRevoked = false
         };
 
-        _context.RefreshTokems.Add(refreshTokenEntity);
-        _context.SaveChanges();
+        await _context.RefreshTokems.AddAsync(
+            refreshTokenEntity,
+            cancellationToken);
+
+        await _context.SaveChangesAsync(cancellationToken);
 
         return Ok(new
         {
@@ -86,16 +93,19 @@ public class AuthController : ControllerBase
     // REFRESH TOKEN
     // ==========================================
     [HttpPost("refresh")]
-    public IActionResult Refresh(
-        [FromBody] RefreshTokenRequest request)
+    public async Task<IActionResult> Refresh(
+        [FromBody] RefreshTokenRequest request,
+        CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(request.RefreshToken))
         {
             return BadRequest("Refresh token is required");
         }
 
-        var storedToken = _context.RefreshTokems
-            .FirstOrDefault(x => x.Token == request.RefreshToken);
+        var storedToken = await _context.RefreshTokems
+            .FirstOrDefaultAsync(
+                x => x.Token == request.RefreshToken,
+                cancellationToken);
 
         if (storedToken == null)
         {
@@ -112,8 +122,10 @@ public class AuthController : ControllerBase
             return Unauthorized("Refresh token has expired");
         }
 
-        var user = _context.Users
-            .FirstOrDefault(x => x.Username == storedToken.Username);
+        var user = await _context.Users
+            .FirstOrDefaultAsync(
+                x => x.Username == storedToken.Username,
+                cancellationToken);
 
         if (user == null)
         {
@@ -141,8 +153,11 @@ public class AuthController : ControllerBase
             IsRevoked = false
         };
 
-        _context.RefreshTokems.Add(newRefreshTokenEntity);
-        _context.SaveChanges();
+        await _context.RefreshTokems.AddAsync(
+            newRefreshTokenEntity,
+            cancellationToken);
+
+        await _context.SaveChangesAsync(cancellationToken);
 
         return Ok(new
         {
@@ -155,16 +170,19 @@ public class AuthController : ControllerBase
     // LOGOUT
     // ==========================================
     [HttpPost("logout")]
-    public IActionResult Logout(
-        [FromBody] RefreshTokenRequest request)
+    public async Task<IActionResult> Logout(
+        [FromBody] RefreshTokenRequest request,
+        CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(request.RefreshToken))
         {
             return BadRequest("Refresh token is required");
         }
 
-        var storedToken = _context.RefreshTokems
-            .FirstOrDefault(x => x.Token == request.RefreshToken);
+        var storedToken = await _context.RefreshTokems
+            .FirstOrDefaultAsync(
+                x => x.Token == request.RefreshToken,
+                cancellationToken);
 
         if (storedToken == null)
         {
@@ -174,7 +192,8 @@ public class AuthController : ControllerBase
         if (!storedToken.IsRevoked)
         {
             storedToken.IsRevoked = true;
-            _context.SaveChanges();
+
+            await _context.SaveChangesAsync(cancellationToken);
         }
 
         return Ok(new
@@ -216,3 +235,4 @@ public class AuthController : ControllerBase
             RandomNumberGenerator.GetBytes(64));
     }
 }
+

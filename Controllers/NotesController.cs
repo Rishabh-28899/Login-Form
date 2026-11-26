@@ -57,6 +57,8 @@ namespace Token2Core.Controllers
         public async Task<IActionResult> CreateNote(
             [FromBody] CreateNoteRequestDto request)
         {
+            var cancellationToken = HttpContext.RequestAborted;
+
             if (!TryGetUserId(out int userId))
             {
                 return Unauthorized(
@@ -65,7 +67,8 @@ namespace Token2Core.Controllers
             }
 
             var validationResult =
-                await _createValidator.ValidateAsync(request);
+                await _createValidator.ValidateAsync(
+                    request, cancellationToken);
 
             if (!validationResult.IsValid)
             {
@@ -84,7 +87,6 @@ namespace Token2Core.Controllers
                         errors));
             }
 
-            // Map API DTO to existing service request model
             var serviceRequest = new CreateNoteRequest
             {
                 Title = request.Title,
@@ -93,7 +95,9 @@ namespace Token2Core.Controllers
             };
 
             var note = await _notesService.CreateNoteAsync(
-                serviceRequest, userId);
+                serviceRequest,
+                userId,
+                cancellationToken);
 
             var responseData = new NoteResponseDto
             {
@@ -122,6 +126,8 @@ namespace Token2Core.Controllers
             [FromQuery] string? searchTerm = null,
             [FromQuery] string? topic = null)
         {
+            var cancellationToken = HttpContext.RequestAborted;
+
             if (!TryGetUserId(out int userId))
             {
                 return Unauthorized(
@@ -129,7 +135,6 @@ namespace Token2Core.Controllers
                         "Invalid or missing user ID in token."));
             }
 
-            // Validate pagination parameters
             if (pageNumber < 1 || pageSize < 1 || pageSize > 100)
             {
                 var errors = new List<string>();
@@ -152,14 +157,14 @@ namespace Token2Core.Controllers
                         errors));
             }
 
-            // Search and filter notes with pagination
             var pagedNotes =
                 await _notesService.SearchMyNotesPagedAsync(
                     userId,
                     searchTerm,
                     topic,
                     pageNumber,
-                    pageSize);
+                    pageSize,
+                    cancellationToken);
 
             return Ok(
                 ApiResponse<PagedResponse<NoteResponseDto>>
@@ -172,6 +177,8 @@ namespace Token2Core.Controllers
         [HttpGet("all")]
         public async Task<IActionResult> GetAllNotes()
         {
+            var cancellationToken = HttpContext.RequestAborted;
+
             if (!TryGetUserId(out int userId))
             {
                 return Unauthorized(
@@ -179,7 +186,8 @@ namespace Token2Core.Controllers
                         "Invalid or missing user ID in token."));
             }
 
-            var notes = await _notesService.GetMyNotesAsync(userId);
+            var notes = await _notesService.GetMyNotesAsync(
+                userId, cancellationToken);
 
             var responseData = notes.Select(note => new NoteResponseDto
             {
@@ -199,6 +207,8 @@ namespace Token2Core.Controllers
         [HttpGet("{id:int}")]
         public async Task<IActionResult> GetNote(int id)
         {
+            var cancellationToken = HttpContext.RequestAborted;
+
             if (!TryGetUserId(out int userId))
             {
                 return Unauthorized(
@@ -206,7 +216,8 @@ namespace Token2Core.Controllers
                         "Invalid or missing user ID in token."));
             }
 
-            var note = await _notesService.GetNoteAsync(id, userId);
+            var note = await _notesService.GetNoteAsync(
+                id, userId, cancellationToken);
 
             if (note == null)
             {
@@ -235,6 +246,8 @@ namespace Token2Core.Controllers
             int id,
             [FromBody] UpdateNoteRequestDto request)
         {
+            var cancellationToken = HttpContext.RequestAborted;
+
             if (!TryGetUserId(out int userId))
             {
                 return Unauthorized(
@@ -243,7 +256,8 @@ namespace Token2Core.Controllers
             }
 
             var validationResult =
-                await _updateValidator.ValidateAsync(request);
+                await _updateValidator.ValidateAsync(
+                    request, cancellationToken);
 
             if (!validationResult.IsValid)
             {
@@ -262,7 +276,6 @@ namespace Token2Core.Controllers
                         errors));
             }
 
-            // Map API DTO to existing service request model
             var serviceRequest = new UpdateNoteRequest
             {
                 Title = request.Title,
@@ -271,7 +284,10 @@ namespace Token2Core.Controllers
             };
 
             var updated = await _notesService.UpdateNoteAsync(
-                id, serviceRequest, userId);
+                id,
+                serviceRequest,
+                userId,
+                cancellationToken);
 
             if (!updated)
             {
@@ -298,6 +314,8 @@ namespace Token2Core.Controllers
         [HttpDelete("{id:int}")]
         public async Task<IActionResult> DeleteNote(int id)
         {
+            var cancellationToken = HttpContext.RequestAborted;
+
             if (!TryGetUserId(out int userId))
             {
                 return Unauthorized(
@@ -306,7 +324,7 @@ namespace Token2Core.Controllers
             }
 
             var deleted = await _notesService.DeleteNoteAsync(
-                id, userId);
+                id, userId, cancellationToken);
 
             if (!deleted)
             {
