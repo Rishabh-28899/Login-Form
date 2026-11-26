@@ -1,13 +1,12 @@
 ﻿
-using System.Security.Claims;
 using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 using Token2Core.Validators;
 using Writepad.Model;
-using WritePad.Model;
-using WritePad.Services;
 using WritePad.DTOs;
+using WritePad.Services;
 
 namespace Token2Core.Controllers
 {
@@ -19,14 +18,14 @@ namespace Token2Core.Controllers
         private readonly INotesService _notesService;
         private readonly ILogger<NotesController> _logger;
 
-        private readonly IValidator<CreateNoteRequest> _createValidator;
-        private readonly IValidator<UpdateNoteRequest> _updateValidator;
+        private readonly IValidator<CreateNoteRequestDto> _createValidator;
+        private readonly IValidator<UpdateNoteRequestDto> _updateValidator;
 
         public NotesController(
             INotesService notesService,
             ILogger<NotesController> logger,
-            IValidator<CreateNoteRequest> createValidator,
-            IValidator<UpdateNoteRequest> updateValidator)
+            IValidator<CreateNoteRequestDto> createValidator,
+            IValidator<UpdateNoteRequestDto> updateValidator)
         {
             _notesService = notesService;
             _logger = logger;
@@ -56,7 +55,7 @@ namespace Token2Core.Controllers
         // CREATE NOTE
         [HttpPost]
         public async Task<IActionResult> CreateNote(
-            [FromBody] CreateNoteRequest request)
+            [FromBody] CreateNoteRequestDto request)
         {
             if (!TryGetUserId(out int userId))
             {
@@ -85,15 +84,23 @@ namespace Token2Core.Controllers
                         errors));
             }
 
-            var note = await _notesService.CreateNoteAsync(
-                request, userId);
-
-            var responseData = new
+            // Map API DTO to existing service request model
+            var serviceRequest = new CreateNoteRequest
             {
-                noteId = note.Id,
-                userId = note.UserId,
-                title = note.Title,
-                topic = note.Topic
+                Title = request.Title,
+                Content = request.Content,
+                Topic = request.Topic
+            };
+
+            var note = await _notesService.CreateNoteAsync(
+                serviceRequest, userId);
+
+            var responseData = new NoteResponseDto
+            {
+                NoteId = note.Id,
+                UserId = note.UserId,
+                Title = note.Title,
+                Topic = note.Topic
             };
 
             var response =
@@ -107,9 +114,13 @@ namespace Token2Core.Controllers
                 response);
         }
 
-        // GET MY NOTES
+        // GET MY NOTES WITH SEARCH, FILTER AND PAGINATION
         [HttpGet]
-        public async Task<IActionResult> GetMyNotes()
+        public async Task<IActionResult> GetMyNotes(
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 10,
+            [FromQuery] string? searchTerm = null,
+            [FromQuery] string? topic = null)
         {
             if (!TryGetUserId(out int userId))
             {
@@ -118,12 +129,43 @@ namespace Token2Core.Controllers
                         "Invalid or missing user ID in token."));
             }
 
-            var notes = await _notesService.GetMyNotesAsync(userId);
+            // Validate pagination parameters
+            if (pageNumber < 1 || pageSize < 1 || pageSize > 100)
+            {
+                var errors = new List<string>();
+
+                if (pageNumber < 1)
+                {
+                    errors.Add(
+                        "Page number must be greater than 0.");
+                }
+
+                if (pageSize < 1 || pageSize > 100)
+                {
+                    errors.Add(
+                        "Page size must be between 1 and 100.");
+                }
+
+                return BadRequest(
+                    ApiResponse<object>.FailureResponse(
+                        "Invalid pagination parameters.",
+                        errors));
+            }
+
+            // Search and filter notes with pagination
+            var pagedNotes =
+                await _notesService.SearchMyNotesPagedAsync(
+                    userId,
+                    searchTerm,
+                    topic,
+                    pageNumber,
+                    pageSize);
 
             return Ok(
-                ApiResponse<object>.SuccessResponse(
-                    notes,
-                    "Notes retrieved successfully."));
+                ApiResponse<PagedResponse<NoteResponseDto>>
+                    .SuccessResponse(
+                        pagedNotes,
+                        "Notes retrieved successfully."));
         }
 
         // GET ALL NOTES BELONGING TO CURRENT USER
@@ -139,9 +181,17 @@ namespace Token2Core.Controllers
 
             var notes = await _notesService.GetMyNotesAsync(userId);
 
+            var responseData = notes.Select(note => new NoteResponseDto
+            {
+                NoteId = note.Id,
+                UserId = note.UserId,
+                Title = note.Title,
+                Topic = note.Topic
+            }).ToList();
+
             return Ok(
                 ApiResponse<object>.SuccessResponse(
-                    notes,
+                    responseData,
                     "All notes retrieved successfully."));
         }
 
@@ -165,9 +215,17 @@ namespace Token2Core.Controllers
                         "Note not found."));
             }
 
+            var responseData = new NoteResponseDto
+            {
+                NoteId = note.Id,
+                UserId = note.UserId,
+                Title = note.Title,
+                Topic = note.Topic
+            };
+
             return Ok(
                 ApiResponse<object>.SuccessResponse(
-                    note,
+                    responseData,
                     "Note retrieved successfully."));
         }
 
@@ -175,7 +233,7 @@ namespace Token2Core.Controllers
         [HttpPut("{id:int}")]
         public async Task<IActionResult> UpdateNote(
             int id,
-            [FromBody] UpdateNoteRequest request)
+            [FromBody] UpdateNoteRequestDto request)
         {
             if (!TryGetUserId(out int userId))
             {
@@ -204,8 +262,16 @@ namespace Token2Core.Controllers
                         errors));
             }
 
+            // Map API DTO to existing service request model
+            var serviceRequest = new UpdateNoteRequest
+            {
+                Title = request.Title,
+                Content = request.Content,
+                Topic = request.Topic
+            };
+
             var updated = await _notesService.UpdateNoteAsync(
-                id, request, userId);
+                id, serviceRequest, userId);
 
             if (!updated)
             {
@@ -214,9 +280,12 @@ namespace Token2Core.Controllers
                         "Note not found."));
             }
 
-            var responseData = new
+            var responseData = new NoteResponseDto
             {
-                noteId = id
+                NoteId = id,
+                UserId = userId,
+                Title = request.Title,
+                Topic = request.Topic
             };
 
             return Ok(
@@ -246,7 +315,6 @@ namespace Token2Core.Controllers
                         "Note not found."));
             }
 
-            // 204 = Successfully deleted, no response body
             return NoContent();
         }
     }

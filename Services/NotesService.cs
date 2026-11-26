@@ -1,6 +1,8 @@
 ﻿
+using Microsoft.Extensions.Logging;
 using WritePad.Model;
 using Writepad.Model;
+using WritePad.DTOs;
 
 namespace WritePad.Services
 {
@@ -43,10 +45,11 @@ namespace WritePad.Services
             return note;
         }
 
-        // GET USER NOTES
+        // GET ALL NOTES FOR CURRENT USER
         public async Task<List<Note>> GetMyNotesAsync(int userId)
         {
-            var notes = await _unitOfWork.Notes.GetByUserIdAsync(userId);
+            var notes = await _unitOfWork.Notes
+                .GetByUserIdAsync(userId);
 
             _logger.LogInformation(
                 "Retrieved {Count} notes for UserId: {UserId}",
@@ -56,8 +59,89 @@ namespace WritePad.Services
             return notes;
         }
 
+        // GET PAGINATED NOTES FOR CURRENT USER
+        public async Task<PagedResponse<NoteResponseDto>>
+            GetMyNotesPagedAsync(
+                int userId,
+                int pageNumber,
+                int pageSize)
+        {
+            var result = await _unitOfWork.Notes
+                .GetPagedByUserIdAsync(
+                    userId,
+                    pageNumber,
+                    pageSize);
+
+            var noteDtos = result.Items.Select(note =>
+                new NoteResponseDto
+                {
+                    NoteId = note.Id,
+                    UserId = note.UserId,
+                    Title = note.Title,
+                    Topic = note.Topic
+                }).ToList();
+
+            var response = new PagedResponse<NoteResponseDto>(
+                noteDtos,
+                pageNumber,
+                pageSize,
+                result.TotalRecords);
+
+            _logger.LogInformation(
+                "Retrieved page {PageNumber} of notes for UserId: {UserId}. Total records: {TotalRecords}",
+                pageNumber,
+                userId,
+                result.TotalRecords);
+
+            return response;
+        }
+
+        // SEARCH AND FILTER PAGINATED NOTES
+        public async Task<PagedResponse<NoteResponseDto>>
+            SearchMyNotesPagedAsync(
+                int userId,
+                string? searchTerm,
+                string? topic,
+                int pageNumber,
+                int pageSize)
+        {
+            var result = await _unitOfWork.Notes
+                .SearchPagedByUserIdAsync(
+                    userId,
+                    searchTerm,
+                    topic,
+                    pageNumber,
+                    pageSize);
+
+            var noteDtos = result.Items.Select(note =>
+                new NoteResponseDto
+                {
+                    NoteId = note.Id,
+                    UserId = note.UserId,
+                    Title = note.Title,
+                    Topic = note.Topic
+                }).ToList();
+
+            var response = new PagedResponse<NoteResponseDto>(
+                noteDtos,
+                pageNumber,
+                pageSize,
+                result.TotalRecords);
+
+            _logger.LogInformation(
+                "Searched notes for UserId: {UserId}, SearchTerm: {SearchTerm}, Topic: {Topic}, TotalRecords: {TotalRecords}",
+                userId,
+                searchTerm,
+                topic,
+                result.TotalRecords);
+
+            return response;
+        }
+
         // GET SINGLE NOTE
-        public async Task<Note?> GetNoteAsync(int id, int userId)
+        public async Task<Note?> GetNoteAsync(
+            int id,
+            int userId)
         {
             var note = await _unitOfWork.Notes
                 .GetByIdAndUserIdAsync(id, userId);
@@ -110,7 +194,9 @@ namespace WritePad.Services
         }
 
         // DELETE NOTE
-        public async Task<bool> DeleteNoteAsync(int id, int userId)
+        public async Task<bool> DeleteNoteAsync(
+            int id,
+            int userId)
         {
             var note = await _unitOfWork.Notes
                 .GetByIdAndUserIdAsync(id, userId);

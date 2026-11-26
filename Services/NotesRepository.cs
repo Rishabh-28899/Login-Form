@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿
+using Microsoft.EntityFrameworkCore;
 using Token2Core.Data;
 using Writepad.Model;
 using WritePad.Model;
@@ -29,6 +30,69 @@ namespace WritePad.Services
                 .ToListAsync();
         }
 
+        // PAGINATED NOTES
+        public async Task<(List<Note> Items, int TotalRecords)>
+            GetPagedByUserIdAsync(
+                int userId,
+                int pageNumber,
+                int pageSize)
+        {
+            var query = _context.Notes
+                .Where(n => n.UserId == userId);
+
+            // Count total notes for this user
+            var totalRecords = await query.CountAsync();
+
+            // Fetch only the requested page
+            var items = await query
+                .OrderByDescending(n => n.CreatedAt)
+                .Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            return (items, totalRecords);
+        }
+
+        // SEARCH, FILTER AND PAGINATION
+        public async Task<(List<Note> Items, int TotalRecords)>
+            SearchPagedByUserIdAsync(
+                int userId,
+                string? searchTerm,
+                string? topic,
+                int pageNumber,
+                int pageSize)
+        {
+            // First restrict notes to the authenticated user
+            var query = _context.Notes
+                .Where(n => n.UserId == userId);
+
+            // Search by title
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                query = query.Where(n =>
+                    n.Title.Contains(searchTerm));
+            }
+
+            // Filter by topic
+            if (!string.IsNullOrWhiteSpace(topic))
+            {
+                query = query.Where(n =>
+                    n.Topic == topic);
+            }
+
+            // Count after applying filters
+            var totalRecords = await query.CountAsync();
+
+            // Sort and paginate
+            var items = await query
+                .OrderByDescending(n => n.CreatedAt)
+                .Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            return (items, totalRecords);
+        }
+
         public async Task<Note?> GetByIdAndUserIdAsync(int id, int userId)
         {
             return await _context.Notes
@@ -50,4 +114,3 @@ namespace WritePad.Services
         }
     }
 }
-

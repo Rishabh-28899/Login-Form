@@ -1,4 +1,5 @@
-﻿using Writepad.Model;
+﻿
+using Writepad.Model;
 using WritePad.Model;
 
 namespace WritePad.Services
@@ -9,6 +10,18 @@ namespace WritePad.Services
 
         Task<List<Note>> GetByUserIdAsync(int userId);
 
+        Task<(List<Note> Items, int TotalRecords)> GetPagedByUserIdAsync(
+            int userId,
+            int pageNumber,
+            int pageSize);
+
+        Task<(List<Note> Items, int TotalRecords)> SearchPagedByUserIdAsync(
+            int userId,
+            string? searchTerm,
+            string? topic,
+            int pageNumber,
+            int pageSize);
+
         Task<Note?> GetByIdAndUserIdAsync(int id, int userId);
 
         Task UpdateAsync(Note note);
@@ -16,3 +29,5 @@ namespace WritePad.Services
         Task DeleteAsync(Note note);
     }
 }
+
+

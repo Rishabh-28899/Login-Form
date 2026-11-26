@@ -1,11 +1,11 @@
 ﻿
 using FluentValidation;
-using Writepad.Model;
+using WritePad.DTOs;
 
 namespace Token2Core.Validators
 {
     public class UpdateNoteRequestValidator
-        : AbstractValidator<UpdateNoteRequest>
+        : AbstractValidator<UpdateNoteRequestDto>
     {
         public UpdateNoteRequestValidator()
         {

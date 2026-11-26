@@ -1,6 +1,6 @@
 ﻿
 using Token2Core.Validators;
-using Writepad.Model;
+using WritePad.DTOs;
 
 namespace WritePad.Tests;
 
@@ -13,7 +13,7 @@ public class CreateNoteRequestValidatorTests
     [Fact]
     public void Valid_Note_Should_Pass()
     {
-        var request = new CreateNoteRequest
+        var request = new CreateNoteRequestDto
         {
             Title = "My First Note",
             Content = "This is my note content.",
@@ -28,7 +28,7 @@ public class CreateNoteRequestValidatorTests
     [Fact]
     public void Empty_Title_Should_Fail()
     {
-        var request = new CreateNoteRequest
+        var request = new CreateNoteRequestDto
         {
             Title = "",
             Content = "This is my note content."
@@ -44,7 +44,7 @@ public class CreateNoteRequestValidatorTests
     [Fact]
     public void Empty_Content_Should_Fail()
     {
-        var request = new CreateNoteRequest
+        var request = new CreateNoteRequestDto
         {
             Title = "My First Note",
             Content = ""
@@ -62,7 +62,7 @@ public class CreateNoteRequestValidatorTests
     [Fact]
     public void Valid_Update_Note_Should_Pass()
     {
-        var request = new UpdateNoteRequest
+        var request = new UpdateNoteRequestDto
         {
             Title = "Updated Note",
             Content = "Updated note content.",
@@ -78,7 +78,7 @@ public class CreateNoteRequestValidatorTests
     [Fact]
     public void Empty_Update_Title_Should_Fail()
     {
-        var request = new UpdateNoteRequest
+        var request = new UpdateNoteRequestDto
         {
             Title = "",
             Content = "Updated note content."
@@ -95,7 +95,7 @@ public class CreateNoteRequestValidatorTests
     [Fact]
     public void Empty_Update_Content_Should_Fail()
     {
-        var request = new UpdateNoteRequest
+        var request = new UpdateNoteRequestDto
         {
             Title = "Updated Note",
             Content = ""
@@ -108,12 +108,13 @@ public class CreateNoteRequestValidatorTests
         Assert.Contains(result.Errors,
             error => error.PropertyName == "Content");
     }
+
     // CREATE NOTE - MAXIMUM LENGTH TESTS
 
     [Fact]
     public void Title_Exceeding_100_Characters_Should_Fail()
     {
-        var request = new CreateNoteRequest
+        var request = new CreateNoteRequestDto
         {
             Title = new string('A', 101),
             Content = "Valid content"
@@ -129,7 +130,7 @@ public class CreateNoteRequestValidatorTests
     [Fact]
     public void Content_Exceeding_5000_Characters_Should_Fail()
     {
-        var request = new CreateNoteRequest
+        var request = new CreateNoteRequestDto
         {
             Title = "Valid title",
             Content = new string('A', 5001)
@@ -145,7 +146,7 @@ public class CreateNoteRequestValidatorTests
     [Fact]
     public void Topic_Exceeding_50_Characters_Should_Fail()
     {
-        var request = new CreateNoteRequest
+        var request = new CreateNoteRequestDto
         {
             Title = "Valid title",
             Content = "Valid content",
@@ -159,13 +160,12 @@ public class CreateNoteRequestValidatorTests
             error => error.PropertyName == "Topic");
     }
 
-
     // UPDATE NOTE - MAXIMUM LENGTH TESTS
 
     [Fact]
     public void Update_Title_Exceeding_100_Characters_Should_Fail()
     {
-        var request = new UpdateNoteRequest
+        var request = new UpdateNoteRequestDto
         {
             Title = new string('A', 101),
             Content = "Valid content"
@@ -182,7 +182,7 @@ public class CreateNoteRequestValidatorTests
     [Fact]
     public void Update_Content_Exceeding_5000_Characters_Should_Fail()
     {
-        var request = new UpdateNoteRequest
+        var request = new UpdateNoteRequestDto
         {
             Title = "Valid title",
             Content = new string('A', 5001)
@@ -199,7 +199,7 @@ public class CreateNoteRequestValidatorTests
     [Fact]
     public void Update_Topic_Exceeding_50_Characters_Should_Fail()
     {
-        var request = new UpdateNoteRequest
+        var request = new UpdateNoteRequestDto
         {
             Title = "Valid title",
             Content = "Valid content",
@@ -213,5 +213,6 @@ public class CreateNoteRequestValidatorTests
         Assert.Contains(result.Errors,
             error => error.PropertyName == "Topic");
     }
-} 
+}
+
 
