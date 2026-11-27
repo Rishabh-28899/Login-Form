@@ -1,9 +1,4 @@
-﻿
-using WritePad.Model;
-using Writepad.Model;
-using WritePad.DTOs;
-
-using WritePad.Model;
+﻿using WritePad.Model;
 using Writepad.Model;
 using WritePad.DTOs;
 

@@ -1,9 +1,9 @@
-﻿
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
 using Token2Core.Data;
+using WritePad.DTOs;
 using WritePad.Model;
 using WritePad.Services;
 
@@ -16,13 +16,16 @@ namespace Token2Core.Controllers
     {
         private readonly TokenDbContext _context;
         private readonly PasswordService _passwordService;
+        private readonly ILogger<AdminController> _logger;
 
         public AdminController(
             TokenDbContext context,
-            PasswordService passwordService)
+            PasswordService passwordService,
+            ILogger<AdminController> logger)
         {
             _context = context;
             _passwordService = passwordService;
+            _logger = logger;
         }
 
         // =====================================
@@ -31,21 +34,27 @@ namespace Token2Core.Controllers
         // =====================================
 
         [HttpGet("users")]
-        public async Task<IActionResult> GetAllUsers()
+        public async Task<IActionResult> GetAllUsers(
+            CancellationToken cancellationToken)
         {
             var users = await _context.Users
                 .AsNoTracking()
                 .OrderBy(u => u.Id)
-                .Select(u => new
+                .Select(u => new AdminUserResponseDto
                 {
-                    u.Id,
-                    u.Username,
-                    u.Email,
-                    u.Role
+                    Id = u.Id,
+                    Username = u.Username,
+                    Email = u.Email,
+                    Role = u.Role
                 })
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
 
-            return Ok(users);
+            _logger.LogInformation(
+                "Admin retrieved {UserCount} users",
+                users.Count);
+
+            return Ok(ApiResponse<List<AdminUserResponseDto>>
+                .SuccessResponse(users, "Users retrieved successfully."));
         }
 
         // =====================================
@@ -54,25 +63,36 @@ namespace Token2Core.Controllers
         // =====================================
 
         [HttpGet("dashboard")]
-        public async Task<IActionResult> GetDashboard()
+        public async Task<IActionResult> GetDashboard(
+            CancellationToken cancellationToken)
         {
-            var totalUsers = await _context.Users.CountAsync();
+            var totalUsers = await _context.Users
+                .CountAsync(cancellationToken);
 
             var totalAdmins = await _context.Users
-                .CountAsync(u => u.Role == "Admin");
+                .CountAsync(u => u.Role == "Admin", cancellationToken);
 
             var regularUsers = await _context.Users
-                .CountAsync(u => u.Role == "User");
+                .CountAsync(u => u.Role == "User", cancellationToken);
 
-            var totalNotes = await _context.Notes.CountAsync();
+            var totalNotes = await _context.Notes
+                .CountAsync(cancellationToken);
 
-            return Ok(new
+            var dashboard = new AdminDashboardResponseDto
             {
                 TotalUsers = totalUsers,
                 TotalAdmins = totalAdmins,
                 RegularUsers = regularUsers,
                 TotalNotes = totalNotes
-            });
+            };
+
+            _logger.LogInformation(
+                "Admin retrieved dashboard statistics");
+
+            return Ok(ApiResponse<AdminDashboardResponseDto>
+                .SuccessResponse(
+                    dashboard,
+                    "Dashboard statistics retrieved successfully."));
         }
 
         // =====================================
@@ -81,25 +101,31 @@ namespace Token2Core.Controllers
         // =====================================
 
         [HttpGet("notes")]
-        public async Task<IActionResult> GetAllNotes()
+        public async Task<IActionResult> GetAllNotes(
+            CancellationToken cancellationToken)
         {
             var notes = await _context.Notes
                 .AsNoTracking()
                 .OrderByDescending(n => n.CreatedAt)
-                .Select(n => new
+                .Select(n => new AdminNoteResponseDto
                 {
-                    n.Id,
-                    n.Title,
-                    n.Topic,
-                    n.Content,
-                    n.CreatedAt,
-                    n.UpdatedAt,
-                    n.UserId,
-                    Username = n.User.Username
+                    Id = n.Id,
+                    Title = n.Title,
+                    Topic = n.Topic,
+                    Content = n.Content,
+                    CreatedAt = n.CreatedAt,
+                    UpdatedAt = n.UpdatedAt,
+                    UserId = n.UserId,
+                    Username = n.User.Username ?? string.Empty
                 })
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
 
-            return Ok(notes);
+            _logger.LogInformation(
+                "Admin retrieved {NoteCount} notes",
+                notes.Count);
+
+            return Ok(ApiResponse<List<AdminNoteResponseDto>>
+                .SuccessResponse(notes, "Notes retrieved successfully."));
         }
 
         // =====================================
@@ -127,70 +153,86 @@ namespace Token2Core.Controllers
 
         [HttpPost("users")]
         public async Task<IActionResult> AddUser(
-            [FromBody] AddUserRequest request)
+            [FromBody] AddUserRequest request,
+            CancellationToken cancellationToken)
         {
+            var username = request.Username.Trim();
+            var email = request.Email.Trim();
+
             // Check duplicate username
+
             var usernameExists = await _context.Users
-                .AnyAsync(u => u.Username == request.Username.Trim());
+                .AnyAsync(
+                    u => u.Username == username,
+                    cancellationToken);
 
             if (usernameExists)
             {
-                return BadRequest(new
-                {
-                    message = "Username already exists."
-                });
+                return BadRequest(
+                    ApiResponse<object>.FailureResponse(
+                        "Username already exists."));
             }
 
             // Check duplicate email
+
             var emailExists = await _context.Users
-                .AnyAsync(u => u.Email == request.Email.Trim());
+                .AnyAsync(
+                    u => u.Email == email,
+                    cancellationToken);
 
             if (emailExists)
             {
-                return BadRequest(new
-                {
-                    message = "Email already exists."
-                });
+                return BadRequest(
+                    ApiResponse<object>.FailureResponse(
+                        "Email already exists."));
             }
 
             // Validate role
+
             if (request.Role != "User" &&
                 request.Role != "Admin")
             {
-                return BadRequest(new
-                {
-                    message = "Invalid role."
-                });
+                return BadRequest(
+                    ApiResponse<object>.FailureResponse(
+                        "Invalid role."));
             }
 
             // Create user
+
             var user = new User
             {
-                Username = request.Username.Trim(),
-                Email = request.Email.Trim(),
+                Username = username,
+                Email = email,
                 Role = request.Role
             };
 
-            // Hash password using existing PasswordService
+            // Hash password
+
             user.PasswordHash =
                 _passwordService.HashPassword(request.Password);
 
             // Save to database
+
             _context.Users.Add(user);
 
-            await _context.SaveChangesAsync();
+            await _context.SaveChangesAsync(cancellationToken);
 
-            return Ok(new
+            var response = new AdminUserResponseDto
             {
-                message = "User created successfully!",
-                user = new
-                {
-                    user.Id,
-                    user.Username,
-                    user.Email,
-                    user.Role
-                }
-            });
+                Id = user.Id,
+                Username = user.Username,
+                Email = user.Email,
+                Role = user.Role
+            };
+
+            _logger.LogInformation(
+                "Admin created user with ID {UserId}",
+                user.Id);
+
+            return Ok(
+                ApiResponse<AdminUserResponseDto>.SuccessResponse(
+                    response,
+                    "User created successfully."));
         }
     }
 }

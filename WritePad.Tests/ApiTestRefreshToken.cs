@@ -65,7 +65,9 @@ public class ApiTestRefreshToken
             .ReadFromJsonAsync<JsonElement>();
 
         var oldRefreshToken = loginJson
-            .GetProperty("refreshToken").GetString();
+            .GetProperty("data")
+            .GetProperty("refreshToken")
+            .GetString();
 
         Assert.False(string.IsNullOrEmpty(oldRefreshToken));
 
@@ -82,10 +84,14 @@ public class ApiTestRefreshToken
             .ReadFromJsonAsync<JsonElement>();
 
         var newAccessToken = refreshJson
-            .GetProperty("accessToken").GetString();
+            .GetProperty("data")
+            .GetProperty("accessToken")
+            .GetString();
 
         var newRefreshToken = refreshJson
-            .GetProperty("refreshToken").GetString();
+            .GetProperty("data")
+            .GetProperty("refreshToken")
+            .GetString();
 
         Assert.False(string.IsNullOrEmpty(newAccessToken));
         Assert.False(string.IsNullOrEmpty(newRefreshToken));
@@ -145,7 +151,9 @@ public class ApiTestRefreshToken
             .ReadFromJsonAsync<JsonElement>();
 
         var oldRefreshToken = loginJson
-            .GetProperty("refreshToken").GetString();
+            .GetProperty("data")
+            .GetProperty("refreshToken")
+            .GetString();
 
         Assert.False(string.IsNullOrEmpty(oldRefreshToken));
 
@@ -262,7 +270,9 @@ public class ApiTestRefreshToken
             .ReadFromJsonAsync<JsonElement>();
 
         var refreshToken = loginJson
-            .GetProperty("refreshToken").GetString();
+            .GetProperty("data")
+            .GetProperty("refreshToken")
+            .GetString();
 
         Assert.False(string.IsNullOrEmpty(refreshToken));
 
@@ -326,7 +336,9 @@ public class ApiTestRefreshToken
             .ReadFromJsonAsync<JsonElement>();
 
         var refreshToken = loginJson
-            .GetProperty("refreshToken").GetString();
+            .GetProperty("data")
+            .GetProperty("refreshToken")
+            .GetString();
 
         Assert.False(string.IsNullOrEmpty(refreshToken));
 

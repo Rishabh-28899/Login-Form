@@ -108,7 +108,7 @@ namespace Token2Core.Controllers
             };
 
             var response =
-                ApiResponse<object>.SuccessResponse(
+                ApiResponse<NoteResponseDto>.SuccessResponse(
                     responseData,
                     "Note created successfully.");
 
@@ -189,16 +189,17 @@ namespace Token2Core.Controllers
             var notes = await _notesService.GetMyNotesAsync(
                 userId, cancellationToken);
 
-            var responseData = notes.Select(note => new NoteResponseDto
-            {
-                NoteId = note.Id,
-                UserId = note.UserId,
-                Title = note.Title,
-                Topic = note.Topic
-            }).ToList();
+            var responseData = notes.Select(note =>
+                new NoteResponseDto
+                {
+                    NoteId = note.Id,
+                    UserId = note.UserId,
+                    Title = note.Title,
+                    Topic = note.Topic
+                }).ToList();
 
             return Ok(
-                ApiResponse<object>.SuccessResponse(
+                ApiResponse<List<NoteResponseDto>>.SuccessResponse(
                     responseData,
                     "All notes retrieved successfully."));
         }
@@ -235,7 +236,7 @@ namespace Token2Core.Controllers
             };
 
             return Ok(
-                ApiResponse<object>.SuccessResponse(
+                ApiResponse<NoteResponseDto>.SuccessResponse(
                     responseData,
                     "Note retrieved successfully."));
         }
@@ -305,7 +306,7 @@ namespace Token2Core.Controllers
             };
 
             return Ok(
-                ApiResponse<object>.SuccessResponse(
+                ApiResponse<NoteResponseDto>.SuccessResponse(
                     responseData,
                     "Note updated successfully."));
         }

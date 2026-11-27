@@ -7,6 +7,7 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using Token2Core.Data;
+using WritePad.DTOs;
 using WritePad.Model;
 using WritePad.Services;
 
@@ -19,15 +20,18 @@ public class AuthController : ControllerBase
     private readonly IConfiguration _configuration;
     private readonly TokenDbContext _context;
     private readonly PasswordService _passwordService;
+    private readonly ILogger<AuthController> _logger;
 
     public AuthController(
         IConfiguration configuration,
         TokenDbContext context,
-        PasswordService passwordService)
+        PasswordService passwordService,
+        ILogger<AuthController> logger)
     {
         _configuration = configuration;
         _context = context;
         _passwordService = passwordService;
+        _logger = logger;
     }
 
     // ==========================================
@@ -38,6 +42,14 @@ public class AuthController : ControllerBase
         [FromBody] LoginRequest request,
         CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(request.Username) ||
+            string.IsNullOrWhiteSpace(request.Password))
+        {
+            return BadRequest(
+                ApiResponse<object>.FailureResponse(
+                    "Username and password are required."));
+        }
+
         var user = await _context.Users
             .FirstOrDefaultAsync(
                 x => x.Username == request.Username,
@@ -45,7 +57,12 @@ public class AuthController : ControllerBase
 
         if (user == null)
         {
-            return Unauthorized("Username or password is incorrect");
+            _logger.LogWarning(
+                "Login failed. Invalid credentials.");
+
+            return Unauthorized(
+                ApiResponse<object>.FailureResponse(
+                    "Username or password is incorrect."));
         }
 
         var passwordValid = _passwordService.VerifyPassword(
@@ -54,7 +71,13 @@ public class AuthController : ControllerBase
 
         if (!passwordValid)
         {
-            return Unauthorized("Username or password is incorrect");
+            _logger.LogWarning(
+                "Login failed for UserId: {UserId}",
+                user.Id);
+
+            return Unauthorized(
+                ApiResponse<object>.FailureResponse(
+                    "Username or password is incorrect."));
         }
 
         var claims = new List<Claim>
@@ -82,11 +105,20 @@ public class AuthController : ControllerBase
 
         await _context.SaveChangesAsync(cancellationToken);
 
-        return Ok(new
+        _logger.LogInformation(
+            "User {UserId} logged in successfully.",
+            user.Id);
+
+        var responseData = new AuthResponseDto
         {
-            accessToken = accessToken,
-            refreshToken = refreshToken
-        });
+            AccessToken = accessToken,
+            RefreshToken = refreshToken
+        };
+
+        return Ok(
+            ApiResponse<AuthResponseDto>.SuccessResponse(
+                responseData,
+                "Login successful."));
     }
 
     // ==========================================
@@ -97,9 +129,11 @@ public class AuthController : ControllerBase
         [FromBody] RefreshTokenRequest request,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrEmpty(request.RefreshToken))
+        if (string.IsNullOrWhiteSpace(request.RefreshToken))
         {
-            return BadRequest("Refresh token is required");
+            return BadRequest(
+                ApiResponse<object>.FailureResponse(
+                    "Refresh token is required."));
         }
 
         var storedToken = await _context.RefreshTokems
@@ -109,17 +143,26 @@ public class AuthController : ControllerBase
 
         if (storedToken == null)
         {
-            return Unauthorized("Invalid refresh token");
+            return Unauthorized(
+                ApiResponse<object>.FailureResponse(
+                    "Invalid refresh token."));
         }
 
         if (storedToken.IsRevoked)
         {
-            return Unauthorized("Refresh token has been revoked");
+            _logger.LogWarning(
+                "Attempt to use revoked refresh token.");
+
+            return Unauthorized(
+                ApiResponse<object>.FailureResponse(
+                    "Refresh token has been revoked."));
         }
 
         if (storedToken.ExpiresAt <= DateTime.UtcNow)
         {
-            return Unauthorized("Refresh token has expired");
+            return Unauthorized(
+                ApiResponse<object>.FailureResponse(
+                    "Refresh token has expired."));
         }
 
         var user = await _context.Users
@@ -129,7 +172,9 @@ public class AuthController : ControllerBase
 
         if (user == null)
         {
-            return Unauthorized("User not found");
+            return Unauthorized(
+                ApiResponse<object>.FailureResponse(
+                    "User not found."));
         }
 
         var claims = new List<Claim>
@@ -159,11 +204,20 @@ public class AuthController : ControllerBase
 
         await _context.SaveChangesAsync(cancellationToken);
 
-        return Ok(new
+        _logger.LogInformation(
+            "Refresh token rotated successfully for UserId: {UserId}",
+            user.Id);
+
+        var responseData = new AuthResponseDto
         {
-            accessToken = newAccessToken,
-            refreshToken = newRefreshToken
-        });
+            AccessToken = newAccessToken,
+            RefreshToken = newRefreshToken
+        };
+
+        return Ok(
+            ApiResponse<AuthResponseDto>.SuccessResponse(
+                responseData,
+                "Token refreshed successfully."));
     }
 
     // ==========================================
@@ -174,9 +228,11 @@ public class AuthController : ControllerBase
         [FromBody] RefreshTokenRequest request,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrEmpty(request.RefreshToken))
+        if (string.IsNullOrWhiteSpace(request.RefreshToken))
         {
-            return BadRequest("Refresh token is required");
+            return BadRequest(
+                ApiResponse<object>.FailureResponse(
+                    "Refresh token is required."));
         }
 
         var storedToken = await _context.RefreshTokems
@@ -186,7 +242,9 @@ public class AuthController : ControllerBase
 
         if (storedToken == null)
         {
-            return Unauthorized("Invalid refresh token");
+            return Unauthorized(
+                ApiResponse<object>.FailureResponse(
+                    "Invalid refresh token."));
         }
 
         if (!storedToken.IsRevoked)
@@ -196,10 +254,14 @@ public class AuthController : ControllerBase
             await _context.SaveChangesAsync(cancellationToken);
         }
 
-        return Ok(new
-        {
-            message = "Logged out successfully"
-        });
+        _logger.LogInformation(
+            "User logged out. Username: {Username}",
+            storedToken.Username);
+
+        return Ok(
+            ApiResponse<object>.SuccessResponse(
+                null,
+                "Logged out successfully."));
     }
 
     // ==========================================

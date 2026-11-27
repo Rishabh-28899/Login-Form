@@ -1,6 +1,7 @@
 ﻿
 using WritePad.Model;
 using WritePad.Services;
+using WritePad.DTOs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -26,24 +27,32 @@ namespace Token2Core.Controllers
         // REGISTER: Public registration always creates a normal User.
         [AllowAnonymous]
         [HttpPost("register")]
-        public IActionResult Register([FromBody] RegisterRequest request)
+        public async Task<IActionResult> Register(
+            [FromBody] RegisterRequest request,
+            CancellationToken cancellationToken)
         {
             if (string.IsNullOrWhiteSpace(request.Username) ||
                 string.IsNullOrWhiteSpace(request.Email) ||
                 string.IsNullOrWhiteSpace(request.Password))
             {
-                return BadRequest("Username, email and password are required.");
+                return BadRequest(
+                    ApiResponse<object>.FailureResponse(
+                        "Username, email and password are required."));
             }
 
             var username = request.Username.Trim();
             var email = request.Email.Trim();
 
-            var existingUser = _context.Users
-                .FirstOrDefault(x => x.Username == username);
+            var existingUser = await _context.Users
+                .FirstOrDefaultAsync(
+                    x => x.Username == username,
+                    cancellationToken);
 
             if (existingUser != null)
             {
-                return BadRequest("Username already exists.");
+                return BadRequest(
+                    ApiResponse<object>.FailureResponse(
+                        "Username already exists."));
             }
 
             var passwordHash =
@@ -58,51 +67,65 @@ namespace Token2Core.Controllers
             };
 
             _context.Users.Add(user);
-            _context.SaveChanges();
 
-            return Ok(new
-            {
-                message = "User registered successfully.",
-                username = user.Username
-            });
+            await _context.SaveChangesAsync(cancellationToken);
+
+            return Ok(
+                ApiResponse<object>.SuccessResponse(
+                    new
+                    {
+                        username = user.Username
+                    },
+                    "User registered successfully."));
         }
 
         // GET CURRENT LOGGED-IN USER
         [Authorize]
         [HttpGet("getuser")]
-        public IActionResult GetUser()
+        public async Task<IActionResult> GetUser(
+            CancellationToken cancellationToken)
         {
             var userIdValue =
                 HttpContext.Items["UserId"]?.ToString();
 
             if (!int.TryParse(userIdValue, out int userId))
             {
-                return Unauthorized("Valid User ID was not found.");
+                return Unauthorized(
+                    ApiResponse<object>.FailureResponse(
+                        "Valid User ID was not found."));
             }
 
-            var user = _context.Users
-                .FirstOrDefault(x => x.Id == userId);
+            var user = await _context.Users
+                .FirstOrDefaultAsync(
+                    x => x.Id == userId,
+                    cancellationToken);
 
             if (user == null)
             {
-                return NotFound("User not found.");
+                return NotFound(
+                    ApiResponse<object>.FailureResponse(
+                        "User not found."));
             }
 
-            return Ok(new
-            {
-                id = user.Id,
-                username = user.Username,
-                email = user.Email,
-                role = user.Role
-            });
+            return Ok(
+                ApiResponse<object>.SuccessResponse(
+                    new
+                    {
+                        id = user.Id,
+                        username = user.Username,
+                        email = user.Email,
+                        role = user.Role
+                    },
+                    "User details retrieved successfully."));
         }
 
         // GET ALL USERS: ADMIN ONLY
         [Authorize(Roles = "Admin")]
         [HttpGet("getallusers")]
-        public IActionResult GetAllUsers()
+        public async Task<IActionResult> GetAllUsers(
+            CancellationToken cancellationToken)
         {
-            var users = _context.Users
+            var users = await _context.Users
                 .Select(user => new
                 {
                     id = user.Id,
@@ -110,14 +133,15 @@ namespace Token2Core.Controllers
                     email = user.Email,
                     role = user.Role
                 })
-                .ToList();
+                .ToListAsync(cancellationToken);
 
-            return Ok(users);
+            return Ok(
+                ApiResponse<object>.SuccessResponse(
+                    users,
+                    "Users retrieved successfully."));
         }
     }
 }
-
-
 
 
 
