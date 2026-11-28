@@ -58,6 +58,84 @@ namespace Token2Core.Controllers
         }
 
         // =====================================
+        // 1A. GET PAGINATED USERS
+        // GET: api/Admin/users/paged?pageNumber=1&pageSize=10
+        // =====================================
+
+        [HttpGet("users/paged")]
+        public async Task<IActionResult> GetPaginatedUsers(
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 10,
+            CancellationToken cancellationToken = default)
+        {
+            // Validate pagination parameters
+
+            if (pageNumber < 1)
+            {
+                return BadRequest(
+                    ApiResponse<object>.FailureResponse(
+                        "Page number must be greater than zero."));
+            }
+
+            if (pageSize < 1 || pageSize > 100)
+            {
+                return BadRequest(
+                    ApiResponse<object>.FailureResponse(
+                        "Page size must be between 1 and 100."));
+            }
+
+            // Get total user count
+
+            var totalCount = await _context.Users
+                .CountAsync(cancellationToken);
+
+            // Calculate total pages
+
+            var totalPages = (int)Math.Ceiling(
+                totalCount / (double)pageSize);
+
+            // Fetch only the requested page
+
+            var users = await _context.Users
+                .AsNoTracking()
+                .OrderBy(u => u.Id)
+                .Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .Select(u => new AdminUserResponseDto
+                {
+                    Id = u.Id,
+                    Username = u.Username,
+                    Email = u.Email,
+                    Role = u.Role
+                })
+                .ToListAsync(cancellationToken);
+
+            // Prepare paginated response
+
+            var response = new PagedResponseDto<AdminUserResponseDto>
+            {
+                Items = users,
+                TotalCount = totalCount,
+                PageNumber = pageNumber,
+                PageSize = pageSize,
+                TotalPages = totalPages
+            };
+
+            _logger.LogInformation(
+                "Admin retrieved users page {PageNumber} with page size {PageSize}. Total users: {TotalCount}",
+                pageNumber,
+                pageSize,
+                totalCount);
+
+            return Ok(
+                ApiResponse<PagedResponseDto<AdminUserResponseDto>>
+                    .SuccessResponse(
+                        response,
+                        "Users retrieved successfully."));
+        }
+
+
+        // =====================================
         // 2. DASHBOARD STATISTICS
         // GET: api/Admin/dashboard
         // =====================================
@@ -236,4 +314,5 @@ namespace Token2Core.Controllers
         }
     }
 }
+
 
